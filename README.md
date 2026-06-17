@@ -8,6 +8,11 @@
 real terminal/shell session programmatically**, while a human can simultaneously **watch and type into
 the same session from a browser**.
 
+**A primary motivating use case:** let a **Hermes agent — or any open-source agent — *use Claude Code***
+(and other interactive CLIs) by driving it inside the shared terminal, while a human can still watch and
+step in. termbridge is the bridge that makes an interactive CLI agent programmatically operable by another
+agent.
+
 It is the missing integration of two halves that already exist separately in our other projects:
 
 - **Human ↔ web terminal** — proven in [`sentry-fixer-bot`](../sentry-fixer-bot) (`alertforge`):

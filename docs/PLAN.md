@@ -19,6 +19,12 @@ A 110-agent deep-research pass (see [RESEARCH.md](RESEARCH.md)) confirmed that n
 integrates both halves, and that the canonical answer to "how do a human and an agent share one
 terminal" is **tmux as a shared substrate**. That is the foundation of this design.
 
+**Primary motivating use case:** let a **Hermes agent — or any open-source agent — drive the Claude Code
+CLI** (and other interactive CLIs like `gh`, `vim`, REPLs) programmatically inside the shared session,
+with a human able to watch and intervene. Many capable agents can't natively operate an interactive
+TUI/CLI; termbridge gives them a tool surface (MCP) to do exactly that, turning Claude Code into something
+another agent can pilot.
+
 ## 2. Goals / Non-goals
 
 **Goals**
