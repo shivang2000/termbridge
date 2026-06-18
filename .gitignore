@@ -25,3 +25,6 @@ npm-debug.log*
 # runtime
 *.sock
 tmp/
+
+# omc tooling state
+.omc/
