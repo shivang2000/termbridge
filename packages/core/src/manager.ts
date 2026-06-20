@@ -13,6 +13,7 @@ import { mkdtempSync } from "node:fs";
 import { open as openFile, stat as statFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DockerEnvironment } from "./env/docker.js";
 import { LocalEnvironment } from "./env/local.js";
 import { PtyObserver, type ReadAppended } from "./observer/pty-observer.js";
 import { oauthUrlRecognizer } from "./recognizers/oauth-url.js";
@@ -39,11 +40,17 @@ export class ConcurrencyLimitError extends Error {
 	}
 }
 
+/** Context handed to the env factory so per-session backends can wire themselves. */
+export interface EnvFactoryContext {
+	/** Host directory holding this session's `pipe-pane` temp file (Docker bind-mounts it). */
+	pipeDir: string;
+}
+
 export interface SessionManagerOptions {
 	/** Hard cap on concurrent sessions. Defaults to TERMBRIDGE_MAX_SESSIONS or 4. */
 	maxSessions?: number;
-	/** Build an Environment for a given kind. Defaults to LocalEnvironment (local). */
-	envFactory?: (kind: EnvKind) => Environment;
+	/** Build an Environment for a given kind. Defaults to Local/Docker by kind. */
+	envFactory?: (kind: EnvKind, ctx: EnvFactoryContext) => Environment;
 	/**
 	 * Build the per-session PtyObserver, given the `pipe-pane` temp-file path.
 	 * Defaults to a real PtyObserver tailing that file.
@@ -112,7 +119,7 @@ export function makeFileTailer(path: string): ReadAppended {
 
 export class SessionManager {
 	private readonly maxSessions: number;
-	private readonly envFactory: (kind: EnvKind) => Environment;
+	private readonly envFactory: (kind: EnvKind, ctx: EnvFactoryContext) => Environment;
 	private readonly observerFactory: (pipeFile: string) => PtyObserver;
 	private readonly idGen: () => string;
 	private readonly pipeDir: string;
@@ -125,14 +132,21 @@ export class SessionManager {
 		const socket = opts.socket;
 		this.envFactory =
 			opts.envFactory ??
-			((kind: EnvKind) => {
-				if (kind !== "local") {
-					throw new Error(`environment "${kind}" is not supported in M1 (local only)`);
+			((kind: EnvKind, ctx: EnvFactoryContext) => {
+				if (kind === "local") {
+					return new LocalEnvironment({
+						...(exec ? { exec } : {}),
+						...(socket ? { socket } : {}),
+					});
 				}
-				return new LocalEnvironment({
-					...(exec ? { exec } : {}),
-					...(socket ? { socket } : {}),
-				});
+				if (kind === "docker") {
+					return new DockerEnvironment({
+						pipeDir: ctx.pipeDir,
+						...(exec ? { exec } : {}),
+						...(socket ? { socket } : {}),
+					});
+				}
+				throw new Error(`unknown environment "${kind}"`);
 			});
 		this.observerFactory =
 			opts.observerFactory ??
@@ -152,7 +166,9 @@ export class SessionManager {
 		}
 
 		const kind: EnvKind = opts.env ?? "local";
-		const env = this.envFactory(kind);
+		// pipeFile lives under pipeDir; Docker bind-mounts pipeDir so the host
+		// observer can tail the in-container pipe-pane output.
+		const env = this.envFactory(kind, { pipeDir: this.pipeDir });
 
 		const id = this.idGen();
 		const name = opts.name ?? `tb-${id}`;

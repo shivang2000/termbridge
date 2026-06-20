@@ -1,7 +1,14 @@
 import { describe, expect, mock, test } from "bun:test";
 import { ConcurrencyLimitError, SessionManager } from "./manager.js";
 import { PtyObserver } from "./observer/pty-observer.js";
-import type { EnsureSessionOptions, Environment, EnvKind, ExecResult, TermSize } from "./types.js";
+import type {
+	EnsureSessionOptions,
+	Environment,
+	EnvKind,
+	ExecFn,
+	ExecResult,
+	TermSize,
+} from "./types.js";
 
 /** A fake Environment that records lifecycle calls and never touches tmux. */
 function makeEnv(): {
@@ -162,14 +169,32 @@ describe("SessionManager env selection", () => {
 		expect(manager.list()[0]?.env).toBe("local");
 	});
 
-	test("default factory rejects a non-local env in M1", async () => {
-		const observerFactory = () => new PtyObserver({ clock: () => 0 });
+	test("default factory builds a Docker environment for env:'docker' (mocked exec, no real container)", async () => {
+		const calls: Array<{ file: string; args: string[] }> = [];
+		const exec = ((file: string, args: string[]) => {
+			calls.push({ file, args });
+			return Promise.resolve({ stdout: "", stderr: "", code: 0 });
+		}) as unknown as ExecFn;
 		const manager = new SessionManager({
-			observerFactory,
+			exec,
+			observerFactory: () => new PtyObserver({ clock: () => 0 }),
 			idGen: () => "x",
 			pipeDir: "/tmp/termbridge-test",
 		});
-		await expect(manager.open({ env: "docker" })).rejects.toThrow(/local only/);
+		await manager.open({ env: "docker", cwd: "/work" });
+		expect(manager.list()[0]?.env).toBe("docker");
+		// Only the injected mock saw the docker CLI — no real container was spawned.
+		expect(calls.some((c) => c.file === "docker" && c.args[0] === "run")).toBe(true);
+		expect(calls.some((c) => c.file === "docker" && c.args.includes("new-session"))).toBe(true);
+	});
+
+	test("default factory rejects an unknown env", async () => {
+		const manager = new SessionManager({
+			observerFactory: () => new PtyObserver({ clock: () => 0 }),
+			idGen: () => "x",
+			pipeDir: "/tmp/termbridge-test",
+		});
+		await expect(manager.open({ env: "bogus" as EnvKind })).rejects.toThrow(/unknown environment/);
 	});
 
 	test("a failing ensureSession surfaces the error and does not register", async () => {
