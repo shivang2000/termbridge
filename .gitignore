@@ -35,3 +35,4 @@ tmp/
 
 # smoke-test scratch dirs
 .tb-smoke-*
+.dogfood-*
