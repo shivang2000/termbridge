@@ -6,6 +6,7 @@ node_modules/
 dist/
 build/
 *.tsbuildinfo
+.turbo/
 
 # env / secrets
 .env
@@ -28,3 +29,6 @@ tmp/
 
 # omc tooling state
 .omc/
+
+# transient agent worktrees
+.claude/worktrees/
