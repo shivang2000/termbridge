@@ -1,0 +1,6 @@
+{
+	"name": "termbridge",
+	"version": "0.1.0",
+	"description": "Pilot interactive CLIs (incl. Claude Code) over a shared tmux session via MCP.",
+	"author": { "name": "termbridge" }
+}

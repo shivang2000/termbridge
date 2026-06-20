@@ -1,0 +1,9 @@
+{
+	"mcpServers": {
+		"termbridge": {
+			"command": "bun",
+			"args": ["packages/mcp-server/src/stdio.ts"],
+			"env": { "TERMBRIDGE_TMUX_SOCKET": "termbridge" }
+		}
+	}
+}

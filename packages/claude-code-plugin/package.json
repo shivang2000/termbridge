@@ -1,0 +1,11 @@
+{
+	"name": "@termbridge/claude-code-plugin",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"test": "bun test",
+		"lint": "biome check .",
+		"typecheck": "tsc --noEmit"
+	}
+}
