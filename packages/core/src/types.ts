@@ -112,6 +112,8 @@ export interface SendResult {
 export interface ReadScreenOptions {
 	/** Lines of scrollback to include above the visible screen. */
 	scrollback?: number;
+	/** Include ANSI escape sequences (`capture-pane -e`) — used for the initial web paint. */
+	escapes?: boolean;
 }
 
 export interface ReadOutputResult {

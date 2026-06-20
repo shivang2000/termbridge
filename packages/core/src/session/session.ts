@@ -111,14 +111,41 @@ export class Session {
 		return { ok: true };
 	}
 
-	/** Capture the current visible pane (optionally including scrollback). */
+	/** Capture the current visible pane (optionally including scrollback / ANSI escapes). */
 	async readScreen(opts: ReadScreenOptions = {}): Promise<string> {
 		const args = ["capture-pane", "-p", "-t", this.name];
+		if (opts.escapes) {
+			args.push("-e");
+		}
 		if (opts.scrollback !== undefined) {
 			args.push("-S", `-${opts.scrollback}`);
 		}
 		const res = await this.env.tmux(args);
 		return res.stdout;
+	}
+
+	/**
+	 * Mark that a human is interacting (web bridge calls this on every keystroke).
+	 * Flips the WriteLock so the agent's next write is refused with `human_driving`.
+	 */
+	noteHumanActivity(): void {
+		this.writeLock.noteHumanActivity();
+	}
+
+	/**
+	 * Inject raw human keystrokes (xterm byte stream) into the pane. NOT write-
+	 * gated — the human always wins; this is exactly what flips the agent to
+	 * `human_driving`. Bytes are sent literally (`send-keys -l`), so arrow/control
+	 * sequences pass through to the TUI as typed.
+	 */
+	async sendHumanInput(data: string): Promise<void> {
+		this.noteHumanActivity();
+		await this.env.tmux(["send-keys", "-t", this.name, "-l", data]);
+	}
+
+	/** Subscribe to live pane output (pipe-pane stream). Returns an unsubscribe fn. */
+	onOutput(cb: (chunk: string) => void): () => void {
+		return this.observer.onData(cb);
 	}
 
 	/** Bytes appended to the rolling observer buffer since `sinceOffset`. */

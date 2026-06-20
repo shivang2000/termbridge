@@ -88,9 +88,15 @@ export class PtyObserver {
 		}
 	}
 
-	/** Subscribe to every non-empty chunk passing through the observer. */
-	onData(cb: DataCallback): void {
+	/** Subscribe to every non-empty chunk passing through the observer. Returns an unsubscribe fn. */
+	onData(cb: DataCallback): () => void {
 		this.callbacks.push(cb);
+		return () => {
+			const i = this.callbacks.indexOf(cb);
+			if (i >= 0) {
+				this.callbacks.splice(i, 1);
+			}
+		};
 	}
 
 	/** Millisecond timestamp (clock units) of the last ingest. */

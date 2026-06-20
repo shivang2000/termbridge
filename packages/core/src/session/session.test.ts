@@ -283,3 +283,37 @@ describe("Session.close", () => {
 		expect(envh.destroyed).toEqual(["s1"]);
 	});
 });
+
+describe("Session — web bridge surface (M5)", () => {
+	test("readScreen({escapes}) adds capture-pane -e", async () => {
+		const { session, envh } = build({ screen: "X" });
+		await session.readScreen({ escapes: true });
+		expect(envh.calls[0]).toEqual(["capture-pane", "-p", "-t", "s1", "-e"]);
+	});
+
+	test("sendHumanInput sends raw bytes literally and flips the agent to human_driving", async () => {
+		const { session, envh } = build();
+		await session.sendHumanInput("\x1b[A"); // up-arrow bytes
+		expect(envh.calls[0]).toEqual(["send-keys", "-t", "s1", "-l", "\x1b[A"]);
+		// human is now driving → the agent's next write is refused
+		const res = await session.sendText("echo hi");
+		expect(res).toEqual({ ok: false, error: "human_driving" });
+	});
+
+	test("noteHumanActivity alone refuses the agent write", async () => {
+		const { session } = build();
+		session.noteHumanActivity();
+		expect(await session.sendText("x")).toEqual({ ok: false, error: "human_driving" });
+	});
+
+	test("onOutput receives observer chunks and unsubscribes", () => {
+		const observer = new PtyObserver({ clock: makeClock(0).clock });
+		const { session } = build({ observer });
+		const got: string[] = [];
+		const off = session.onOutput((c) => got.push(c));
+		observer.ingest("hello");
+		off();
+		observer.ingest("after-unsub");
+		expect(got).toEqual(["hello"]);
+	});
+});
