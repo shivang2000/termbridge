@@ -16,6 +16,7 @@ export * from "./recognizers/claude-permission.js";
 export * from "./recognizers/generic-yn.js";
 export * from "./recognizers/oauth-url.js";
 export * from "./recognizers/pipeline.js";
+export * from "./recognizers/rate-limit.js";
 // pluggable prompt recognizers (D7)
 export * from "./recognizers/url-detector.js";
 // the shared interactive session + registry (D8)

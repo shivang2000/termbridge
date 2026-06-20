@@ -21,6 +21,7 @@ import { claudePermissionRecognizer } from "./recognizers/claude-permission.js";
 import { genericYnRecognizer } from "./recognizers/generic-yn.js";
 import { oauthUrlRecognizer } from "./recognizers/oauth-url.js";
 import { RecognizerPipeline } from "./recognizers/pipeline.js";
+import { rateLimitRecognizer } from "./recognizers/rate-limit.js";
 import { Session } from "./session/session.js";
 import { WriteLock } from "./session/write-lock.js";
 import type {
@@ -202,10 +203,6 @@ export class SessionManager {
 		const name = opts.name ?? `tb-${id}`;
 		const cwd = opts.cwd ?? process.cwd();
 
-		// Tap the pane to a per-session temp file so the observer's rolling buffer
-		// captures output even after it scrolls off the visible pane.
-		const pipeFile = join(this.pipeDir, `${name}.log`);
-
 		let state: SessionState = "running";
 		try {
 			await env.ensureSession({
@@ -219,18 +216,42 @@ export class SessionManager {
 				// no creds volume is configured → session inherits the ambient HOME.
 				env: this.auth?.homeEnv(),
 			});
-
-			await env.tmux(["pipe-pane", "-O", "-t", name, `cat >> ${pipeFile}`]);
 		} catch (err) {
 			state = "failed";
 			throw err;
 		}
+
+		const { session } = await this.buildSession(id, name, kind, env, state);
+		return session;
+	}
+
+	/**
+	 * Wire up the per-session machinery shared by {@link open} and {@link recover}:
+	 * tap the pane to a per-session pipe-pane file, build the PtyObserver over that
+	 * file, register the recognizer pipeline, create the Session with a fresh
+	 * WriteLock, and register the entry. Returns the registered entry.
+	 *
+	 * Assumes the underlying tmux session already exists (open() creates it via
+	 * ensureSession; recover() adopts a pre-existing one).
+	 */
+	private async buildSession(
+		id: string,
+		name: string,
+		kind: EnvKind,
+		env: Environment,
+		state: SessionState,
+	): Promise<Entry> {
+		// Tap the pane to a per-session temp file so the observer's rolling buffer
+		// captures output even after it scrolls off the visible pane.
+		const pipeFile = join(this.pipeDir, `${name}.log`);
+		await env.tmux(["pipe-pane", "-O", "-t", name, `cat >> ${pipeFile}`]);
 
 		const observer = this.observerFactory(pipeFile);
 		const pipeline = new RecognizerPipeline();
 		pipeline.register(oauthUrlRecognizer);
 		pipeline.register(claudePermissionRecognizer);
 		pipeline.register(genericYnRecognizer);
+		pipeline.register(rateLimitRecognizer);
 		observer.start();
 
 		const session = new Session({
@@ -253,8 +274,36 @@ export class SessionManager {
 		}
 
 		const info: SessionInfo = { id, name, env: kind, state };
-		this.sessions.set(id, { session, info });
-		return session;
+		const entry: Entry = { session, info };
+		this.sessions.set(id, entry);
+		return entry;
+	}
+
+	/**
+	 * Adopt tmux sessions that already exist in the (default-kind) environment but
+	 * are not yet tracked by this manager — e.g. survivors of a daemon restart.
+	 * Each adopted session is registered via {@link buildSession} (id = name,
+	 * state "running") under the concurrency cap. Idempotent: a second call adopts
+	 * nothing already tracked. Returns only the newly-adopted SessionInfos.
+	 */
+	async recover(): Promise<SessionInfo[]> {
+		const kind: EnvKind = "local";
+		const env = this.envFactory(kind, { pipeDir: this.pipeDir });
+		const names = await env.listSessions();
+
+		const adopted: SessionInfo[] = [];
+		for (const name of names) {
+			if (this.sessions.size >= this.maxSessions) {
+				break;
+			}
+			const id = name;
+			if (this.sessions.has(id)) {
+				continue;
+			}
+			const { info } = await this.buildSession(id, name, kind, env, "running");
+			adopted.push({ ...info });
+		}
+		return adopted;
 	}
 
 	/** Look up a live session by id, or undefined if absent/closed. */
