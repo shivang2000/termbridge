@@ -61,5 +61,21 @@ Recognizer event `kind`s an agent should handle: `oauth-url`, `needs_login`, `cl
 3. Every session with that `TERMBRIDGE_HOME` reuses the login (no re-auth). A logged-out volume surfaces a
    `needs_login` event; `claude`'s login URL surfaces as an `oauth-url` event.
 
+## Distribution (private / internal)
+
+termbridge is kept **private** — not on public npm or a public registry. Consumers install via:
+
+- **From source:** `git clone … && bun install`, then point the agent at
+  `bun /ABS/PATH/termbridge/packages/mcp-server/src/stdio.ts` (see per-agent guides).
+- **Local Docker image:** `docker build -t termbridge:0.1.0 -f docker/Dockerfile .` (bun + tmux + node +
+  claude + git); run sessions / the stdio server inside it.
+
+To share with your team later **via a private registry** (no public exposure):
+- Docker: `docker login <your-registry>` → `docker tag termbridge:0.1.0 <your-registry>/termbridge:0.1.0`
+  → `docker push <your-registry>/termbridge:0.1.0`.
+- npm: remove `"private": true` from `packages/{core,mcp-server}/package.json`, `bun run build`, then
+  `bun publish --registry <your-private-registry>` (publishConfig already targets `dist`; `workspace:*`
+  resolves at publish). **Do not publish to public npm.**
+
 Per-agent guides: [claude](./claude.md) · [paperclip](./paperclip.md) · [hermes](./hermes.md) ·
 [opencode](./opencode.md).
