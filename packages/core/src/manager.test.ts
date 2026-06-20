@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { ConcurrencyLimitError, SessionManager } from "./manager.js";
 import { PtyObserver } from "./observer/pty-observer.js";
 import type {
@@ -174,6 +177,30 @@ describe("SessionManager env selection", () => {
 		const { manager } = build();
 		await manager.open();
 		expect(manager.list()[0]?.env).toBe("local");
+	});
+
+	test("default pipeDir honours TERMBRIDGE_PIPE_DIR", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "tb-pipedir-test-"));
+		const prev = process.env.TERMBRIDGE_PIPE_DIR;
+		process.env.TERMBRIDGE_PIPE_DIR = dir;
+		try {
+			const made = makeEnv();
+			let captured = "";
+			const manager = new SessionManager({
+				envFactory: (_kind, ctx) => {
+					captured = ctx.pipeDir;
+					return made.env;
+				},
+				observerFactory: () => new PtyObserver({ clock: () => 0 }),
+				idGen: () => "p1",
+			});
+			await manager.open();
+			expect(captured).toBe(dir);
+		} finally {
+			if (prev === undefined) delete process.env.TERMBRIDGE_PIPE_DIR;
+			else process.env.TERMBRIDGE_PIPE_DIR = prev;
+			rmSync(dir, { recursive: true, force: true });
+		}
 	});
 
 	test("default factory builds a Docker environment for env:'docker' (mocked exec, no real container)", async () => {

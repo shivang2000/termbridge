@@ -9,7 +9,7 @@
 // fs, or env: pass `envFactory`, `observerFactory`, an `idGen`, and a `maxSessions`.
 
 import { Buffer } from "node:buffer";
-import { mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync } from "node:fs";
 import { open as openFile, stat as statFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -87,6 +87,21 @@ function randomId(): string {
 }
 
 /**
+ * Default directory for per-session `pipe-pane` files. Honours
+ * `TERMBRIDGE_PIPE_DIR` (created if missing) so deployments — and the Docker
+ * backend, which bind-mounts this dir — can pin it to a path the daemon can
+ * share; otherwise a fresh mkdtemp dir.
+ */
+function resolveDefaultPipeDir(): string {
+	const fromEnv = process.env.TERMBRIDGE_PIPE_DIR;
+	if (fromEnv) {
+		mkdirSync(fromEnv, { recursive: true });
+		return fromEnv;
+	}
+	return mkdtempSync(join(tmpdir(), "termbridge-"));
+}
+
+/**
  * A {@link ReadAppended} source over a growing file: each call returns the bytes
  * appended since the previous call. Used to feed the PtyObserver from the
  * `pipe-pane -O <file>` tap. Returns "" (never throws) while the file does not
@@ -152,7 +167,7 @@ export class SessionManager {
 			opts.observerFactory ??
 			((pipeFile: string) => new PtyObserver({ readAppended: makeFileTailer(pipeFile) }));
 		this.idGen = opts.idGen ?? randomId;
-		this.pipeDir = opts.pipeDir ?? mkdtempSync(join(tmpdir(), "termbridge-"));
+		this.pipeDir = opts.pipeDir ?? resolveDefaultPipeDir();
 	}
 
 	/**
