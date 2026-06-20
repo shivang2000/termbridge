@@ -82,6 +82,7 @@ describe("createToolSpecs — surface", () => {
 				"resize",
 				"send_control",
 				"send_text",
+				"wait_for_event",
 				"wait_for_idle",
 				"wait_for_text",
 			].sort(),
@@ -199,6 +200,211 @@ describe("createToolSpecs — unknown id", () => {
 			).rejects.toThrow("session not found: ghost");
 		});
 	}
+});
+
+describe("createToolSpecs — wait_for_event", () => {
+	test("returns { timedOut:false } with the matching event when one is ready", async () => {
+		// Stub manager whose session resolves an event immediately.
+		const stubManager = {
+			get: () => ({
+				readEvents: async () => ({
+					events: [{ kind: "needs_login", at: 1 }],
+					nextOffset: 7,
+				}),
+			}),
+		} as unknown as SessionManager;
+		const specs = createToolSpecs(stubManager);
+		const res = (await spec(specs, "wait_for_event").handler({ id: "any" })) as {
+			events: Array<{ kind: string }>;
+			timedOut: boolean;
+			nextOffset: number;
+		};
+		expect(res.timedOut).toBe(false);
+		expect(res.events).toHaveLength(1);
+		expect(res.events[0]?.kind).toBe("needs_login");
+		expect(res.nextOffset).toBe(7);
+	});
+
+	test("filters by kinds — non-matching events do not satisfy the wait", async () => {
+		// readEvents always returns a non-matching event; with kinds set + tiny
+		// timeout the poll must give up with timedOut:true.
+		const stubManager = {
+			get: () => ({
+				readEvents: async () => ({
+					events: [{ kind: "human_took_over", at: 1 }],
+					nextOffset: 3,
+				}),
+			}),
+		} as unknown as SessionManager;
+		const specs = createToolSpecs(stubManager);
+		const res = (await spec(specs, "wait_for_event").handler({
+			id: "any",
+			kinds: ["needs_login"],
+			timeoutMs: 30,
+		})) as { events: unknown[]; timedOut: boolean };
+		expect(res.timedOut).toBe(true);
+		expect(res.events).toHaveLength(0);
+	});
+
+	test("returns { timedOut:true } quickly when no events arrive", async () => {
+		const stubManager = {
+			get: () => ({
+				readEvents: async () => ({ events: [], nextOffset: 0 }),
+			}),
+		} as unknown as SessionManager;
+		const specs = createToolSpecs(stubManager);
+		const res = (await spec(specs, "wait_for_event").handler({
+			id: "any",
+			timeoutMs: 30,
+		})) as { events: unknown[]; timedOut: boolean };
+		expect(res.timedOut).toBe(true);
+		expect(res.events).toHaveLength(0);
+	});
+
+	test("throws 'session not found' for an unknown id", async () => {
+		const { manager } = buildManager();
+		const specs = createToolSpecs(manager);
+		await expect(
+			spec(specs, "wait_for_event").handler({ id: "ghost", timeoutMs: 30 }),
+		).rejects.toThrow("session not found: ghost");
+	});
+
+	// ---- adversarial edge cases ----
+
+	test("matches when ONE of several events matches the kinds filter", async () => {
+		// A batch with mixed kinds — only the matching ones come back.
+		const stubManager = {
+			get: () => ({
+				readEvents: async () => ({
+					events: [
+						{ kind: "human_took_over", at: 1 },
+						{ kind: "needs_login", at: 2 },
+						{ kind: "claude_permission", at: 3 },
+					],
+					nextOffset: 9,
+				}),
+			}),
+		} as unknown as SessionManager;
+		const specs = createToolSpecs(stubManager);
+		const res = (await spec(specs, "wait_for_event").handler({
+			id: "any",
+			kinds: ["needs_login", "claude_permission"],
+		})) as { events: Array<{ kind: string }>; timedOut: boolean; nextOffset: number };
+		expect(res.timedOut).toBe(false);
+		expect(res.events).toHaveLength(2);
+		expect(res.events.map((e) => e.kind).sort()).toEqual(["claude_permission", "needs_login"]);
+		expect(res.nextOffset).toBe(9);
+	});
+
+	test("empty kinds array matches NOTHING (kinds set but no kind is allowed)", async () => {
+		// includes() on [] is always false, so an explicit empty kinds list can
+		// never be satisfied — must time out rather than match.
+		const stubManager = {
+			get: () => ({
+				readEvents: async () => ({
+					events: [{ kind: "needs_login", at: 1 }],
+					nextOffset: 4,
+				}),
+			}),
+		} as unknown as SessionManager;
+		const specs = createToolSpecs(stubManager);
+		const res = (await spec(specs, "wait_for_event").handler({
+			id: "any",
+			kinds: [],
+			timeoutMs: 30,
+		})) as { events: unknown[]; timedOut: boolean };
+		expect(res.timedOut).toBe(true);
+		expect(res.events).toHaveLength(0);
+	});
+
+	test("advances sinceOffset across poll iterations (incremental cursor)", async () => {
+		// First poll: empty, nextOffset 5. Second poll: must be called with
+		// sinceOffset=5, then an event arrives. Proves the cursor is carried.
+		const seen: Array<number | undefined> = [];
+		let call = 0;
+		const stubManager = {
+			get: () => ({
+				readEvents: async (opts: { sinceOffset?: number }) => {
+					seen.push(opts.sinceOffset);
+					call += 1;
+					if (call === 1) return { events: [], nextOffset: 5 };
+					return { events: [{ kind: "needs_login", at: 1 }], nextOffset: 11 };
+				},
+			}),
+		} as unknown as SessionManager;
+		const specs = createToolSpecs(stubManager);
+		const res = (await spec(specs, "wait_for_event").handler({
+			id: "any",
+			timeoutMs: 5000,
+		})) as { events: unknown[]; timedOut: boolean; nextOffset: number };
+		expect(res.timedOut).toBe(false);
+		expect(res.nextOffset).toBe(11);
+		// First read starts at 0; second read uses the advanced cursor.
+		expect(seen[0]).toBe(0);
+		expect(seen[1]).toBe(5);
+	});
+
+	test("timeoutMs:0 returns timedOut:true after a single poll with no match", async () => {
+		// Boundary: Date.now()-start >= 0 is immediately true, so with no match on
+		// the first read it returns timed-out without looping forever.
+		let calls = 0;
+		const stubManager = {
+			get: () => ({
+				readEvents: async () => {
+					calls += 1;
+					return { events: [], nextOffset: 2 };
+				},
+			}),
+		} as unknown as SessionManager;
+		const specs = createToolSpecs(stubManager);
+		const res = (await spec(specs, "wait_for_event").handler({
+			id: "any",
+			timeoutMs: 0,
+		})) as { events: unknown[]; timedOut: boolean; nextOffset: number };
+		expect(res.timedOut).toBe(true);
+		expect(res.nextOffset).toBe(2);
+		// Exactly one read happened — no busy-loop.
+		expect(calls).toBe(1);
+	});
+
+	test("an immediate match wins even when timeoutMs is 0", async () => {
+		// The match check precedes the deadline check, so a ready event is returned
+		// even with a zero timeout.
+		const stubManager = {
+			get: () => ({
+				readEvents: async () => ({
+					events: [{ kind: "needs_login", at: 1 }],
+					nextOffset: 6,
+				}),
+			}),
+		} as unknown as SessionManager;
+		const specs = createToolSpecs(stubManager);
+		const res = (await spec(specs, "wait_for_event").handler({
+			id: "any",
+			timeoutMs: 0,
+		})) as { events: Array<{ kind: string }>; timedOut: boolean };
+		expect(res.timedOut).toBe(false);
+		expect(res.events).toHaveLength(1);
+		expect(res.events[0]?.kind).toBe("needs_login");
+	});
+
+	test("defaults to a 30s deadline when timeoutMs is omitted (matches before)", async () => {
+		// No timeoutMs → must still terminate by matching; verifies the default
+		// path returns the event rather than throwing on missing timeout.
+		const stubManager = {
+			get: () => ({
+				readEvents: async () => ({
+					events: [{ kind: "needs_login", at: 1 }],
+					nextOffset: 1,
+				}),
+			}),
+		} as unknown as SessionManager;
+		const specs = createToolSpecs(stubManager);
+		const res = (await spec(specs, "wait_for_event").handler({ id: "any" })) as {
+			timedOut: boolean;
+		};
+		expect(res.timedOut).toBe(false);
+	});
 });
 
 describe("createToolSpecs — human_driving passthrough", () => {

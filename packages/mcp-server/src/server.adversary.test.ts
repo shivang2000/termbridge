@@ -363,16 +363,17 @@ describe("adversary — server registers exactly the 11 §6 tools", () => {
 		"resize",
 		"send_control",
 		"send_text",
+		"wait_for_event",
 		"wait_for_idle",
 		"wait_for_text",
 	].sort();
 
-	test("createToolSpecs yields exactly 11 specs, no dupes", () => {
+	test("createToolSpecs yields exactly 12 specs, no dupes", () => {
 		const { manager } = buildManager();
 		const specs = createToolSpecs(manager);
-		expect(specs).toHaveLength(11);
+		expect(specs).toHaveLength(12);
 		const names = specs.map((s) => s.name);
-		expect(new Set(names).size).toBe(11);
+		expect(new Set(names).size).toBe(12);
 		expect([...names].sort()).toEqual(EXPECTED);
 	});
 

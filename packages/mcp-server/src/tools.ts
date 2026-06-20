@@ -144,6 +144,37 @@ export function createToolSpecs(manager: SessionManager): ToolSpec[] {
 			},
 		},
 		{
+			name: "wait_for_event",
+			description:
+				"Block until a recognizer event (optionally of given kinds) appears, or timeout.",
+			inputSchema: {
+				id,
+				kinds: z.array(z.string()).optional(),
+				timeoutMs: posInt,
+			},
+			handler: async (args) => {
+				const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+				const s = require_(args.id);
+				const deadline = args.timeoutMs ?? 30000;
+				const start = Date.now();
+				let sinceOffset = 0;
+				for (;;) {
+					const { events, nextOffset } = await s.readEvents({ sinceOffset });
+					sinceOffset = nextOffset;
+					const match = events.filter(
+						(e: { kind: string }) => !args.kinds || args.kinds.includes(e.kind),
+					);
+					if (match.length) {
+						return { events: match, timedOut: false, nextOffset };
+					}
+					if (Date.now() - start >= deadline) {
+						return { events: [], timedOut: true, nextOffset };
+					}
+					await sleep(50);
+				}
+			},
+		},
+		{
 			name: "resize",
 			description: "Resize the session's tmux window to cols x rows.",
 			inputSchema: {
