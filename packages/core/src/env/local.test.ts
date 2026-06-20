@@ -53,11 +53,21 @@ describe("LocalEnvironment", () => {
 		]);
 	});
 
-	test("ensureSession forwards env when provided", async () => {
+	test("ensureSession passes env as tmux -e flags (not the client process env)", async () => {
 		const { exec, calls } = makeExec();
 		const env = new LocalEnvironment({ exec });
-		await env.ensureSession({ name: "s", cwd: "/w", cols: 80, rows: 24, env: { A: "1" } });
-		expect(calls[0]?.opts).toEqual({ env: { A: "1" } });
+		await env.ensureSession({
+			name: "s",
+			cwd: "/w",
+			cols: 80,
+			rows: 24,
+			env: { A: "1", HOME: "/creds" },
+		});
+		const args = calls[0]?.args ?? [];
+		expect(args).toContain("-e");
+		expect(args).toContain("A=1");
+		expect(args).toContain("HOME=/creds");
+		expect(calls[0]?.opts).toBeUndefined();
 	});
 
 	test("tmux passes args through and returns the ExecResult verbatim", async () => {

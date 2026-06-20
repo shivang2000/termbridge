@@ -36,6 +36,11 @@ export class TmuxHelpers {
 
 	async newSession(opts: NewSessionOptions): Promise<ExecResult> {
 		const { name, cwd, cmd, cols = 500, rows = 40, env } = opts;
+		// Pass env as tmux per-session `-e KEY=VALUE` (NOT the client's process
+		// env): tmux's update-environment does not carry HOME, so client env would
+		// not reach the session's panes. `-e` sets the session environment that the
+		// pane shell inherits — this is how AuthProvisioner delivers HOME (M4).
+		const envFlags = Object.entries(env ?? {}).flatMap(([k, v]) => ["-e", `${k}=${v}`]);
 		const args = [
 			"new-session",
 			"-d",
@@ -47,9 +52,10 @@ export class TmuxHelpers {
 			String(rows),
 			"-c",
 			cwd,
+			...envFlags,
 			...(cmd ? [cmd] : []),
 		];
-		return this.exec("tmux", args, env ? { env } : undefined);
+		return this.exec("tmux", args);
 	}
 
 	async sendKeys(name: string, keys: string, opts: SendKeysOptions = {}): Promise<ExecResult> {
