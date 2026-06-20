@@ -57,7 +57,7 @@ another agent can pilot.
 ## 4. Tech stack
 
 - **Language:** TypeScript. **Runtime:** Bun (server/bridge) + Node-compatible (matches both source repos).
-- **Monorepo:** pnpm workspaces + Turbo. **Lint/format:** Biome.
+- **Monorepo:** Bun workspaces + Turbo. **Package manager + test runner:** Bun. **Task pipeline:** Turbo. **Lint/format:** Biome. (No pnpm.)
 - **Frontend:** `xterm.js` (`@xterm/xterm` v6) + `@xterm/addon-fit` + `@xterm/addon-web-links` + React 19.
 - **PTY:** `node-pty` (live SIGWINCH resize — an improvement over `alertforge`'s `script(1)` approach).
 - **Web transport:** Hono + Bun WebSockets (`createBunWebSocket` from `hono/bun`).
@@ -86,7 +86,7 @@ termbridge/
 │  │  └─ client/{XtermPanel.tsx,SessionTerminal.tsx,OAuthCard.tsx}
 │  └─ claude-code-plugin/     # (later) .mcp.json + skill + wake-on-event
 ├─ docker/                    # reference image: tmux + node + node-pty preinstalled
-└─ package.json / pnpm-workspace.yaml / turbo.json / biome.json
+└─ package.json (Bun workspaces) / turbo.json / biome.json / bunfig.toml / tsconfig
 ```
 
 ## 6. Core interfaces (design)
@@ -182,7 +182,7 @@ lets `claude auth login` / `gh auth login` / `sentry-cli login` complete from th
 
 ### M0 — Repo scaffold *(this commit)*
 - [x] Create repo, `docs/`, detailed plan, README, `.gitignore`.
-- [ ] Add `pnpm-workspace.yaml`, root `package.json`, `turbo.json`, `biome.json`, base `tsconfig`.
+- [ ] Add root `package.json` (Bun workspaces), `turbo.json`, `biome.json`, `bunfig.toml`, base `tsconfig`.
 
 ### M1 — `core` + LocalEnvironment
 - [ ] `TerminalEnvironment` interface + registry.

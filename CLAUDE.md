@@ -43,6 +43,7 @@ awaiting the user's review. After review → write the implementation plan → t
 
 ## Key facts to remember
 
+- **Stack:** Bun (package manager + workspaces + test runner) + Turbo (task pipeline) + Biome + TypeScript — **no pnpm**.
 - Reuse from alertforge: `apps/server/src/chat/{pty-runner,url-detector}.ts`, `apps/server/src/routes/chat-ws.ts`,
   `apps/web/src/components/{xterm-panel,chat-terminal}.tsx`. **Upgrade `script(1)` → `node-pty`** for live resize.
 - Reuse from paperclip: adapter/provider pattern (`packages/adapter-utils/src/types.ts`), sandbox providers
