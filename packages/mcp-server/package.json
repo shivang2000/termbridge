@@ -1,14 +1,30 @@
 {
 	"name": "@termbridge/mcp-server",
 	"version": "0.1.0",
-	"private": true,
 	"type": "module",
 	"license": "MIT",
 	"bin": {
-		"termbridge-mcp": "./src/stdio.ts"
+		"termbridge-mcp": "./src/bin.ts"
 	},
 	"exports": {
 		".": "./src/index.ts"
+	},
+	"files": [
+		"dist"
+	],
+	"publishConfig": {
+		"access": "public",
+		"main": "./dist/index.js",
+		"types": "./dist/index.d.ts",
+		"exports": {
+			".": {
+				"types": "./dist/index.d.ts",
+				"import": "./dist/index.js"
+			}
+		},
+		"bin": {
+			"termbridge-mcp": "./dist/bin.js"
+		}
 	},
 	"scripts": {
 		"build": "tsc",
