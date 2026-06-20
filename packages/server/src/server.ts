@@ -6,17 +6,27 @@
 //   • GET  /healthz, static client at /*.
 // Runs on Bun (createBunWebSocket); no node-pty (it fails under Bun and tmux
 // gives us output/input/resize natively).
+//
+// SECURITY: this is a session-piloting control plane (send_text == remote command
+// execution). The tool API and WS are gated by a bearer token (constant-time) and
+// the WS additionally by an Origin allowlist (CSWSH defence); index.ts binds
+// loopback by default. A missing token config means "unauthenticated" (tests only).
 
 import type { SessionManager } from "@termbridge/core";
 import { Hono } from "hono";
 import { createBunWebSocket, serveStatic } from "hono/bun";
 import { createBridge } from "./bridge.js";
+import { isAuthorized, isOriginAllowed } from "./guard.js";
 import { createToolDispatch } from "./http-tools.js";
 
 const { upgradeWebSocket, websocket } = createBunWebSocket();
 
 export interface TermbridgeServerOptions {
 	manager: SessionManager;
+	/** Bearer token required for /api/tool and /ws (`?token=` or `Authorization: Bearer`). Omit only in tests. */
+	token?: string;
+	/** Browser Origins allowed to open the WS (CSWSH defence). Native (no-Origin) clients are always allowed. */
+	allowedOrigins?: string[];
 	/** Directory of the built xterm client (vite output). */
 	clientDir?: string;
 	/** How often to poll recognizer events for attached WS clients (ms). */
@@ -29,26 +39,40 @@ export interface TermbridgeServer {
 }
 
 export function createTermbridgeServer(opts: TermbridgeServerOptions): TermbridgeServer {
-	const { manager } = opts;
+	const { manager, token } = opts;
+	const allowedOrigins = opts.allowedOrigins ?? [];
 	const eventPollMs = opts.eventPollMs ?? 500;
 	const tools = createToolDispatch(manager);
 	const app = new Hono();
 
 	app.get("/healthz", (c) => c.json({ ok: true, tools: tools.names }));
 
-	// Agent-facing §6 tool surface (open_session, send_text, …) over HTTP.
+	// Agent-facing §6 tool surface (open_session, send_text, …) over HTTP — token-gated.
 	app.post("/api/tool/:name", async (c) => {
+		if (!isAuthorized({ token, url: c.req.url, authHeader: c.req.header("authorization") })) {
+			return c.json({ ok: false, error: "unauthorized" }, 401);
+		}
 		const name = c.req.param("name") ?? "";
 		const body = await c.req.json().catch(() => ({}));
 		const res = await tools.call(name, body);
 		return c.json(res, res.ok ? 200 : 400);
 	});
 
-	// Human watch + intervene.
+	// Human watch + intervene — token-gated + Origin-allowlisted.
 	app.get(
 		"/ws/:id",
 		upgradeWebSocket((c) => {
 			const id = c.req.param("id") ?? "";
+			const ok =
+				isAuthorized({ token, url: c.req.url, authHeader: c.req.header("authorization") }) &&
+				isOriginAllowed(c.req.header("origin"), allowedOrigins);
+			if (!ok) {
+				return {
+					onOpen(_evt, ws) {
+						ws.close(1008, "unauthorized");
+					},
+				};
+			}
 			let bridge: ReturnType<typeof createBridge> | null = null;
 			let timer: ReturnType<typeof setInterval> | null = null;
 			return {

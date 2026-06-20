@@ -32,7 +32,7 @@ export type Clock = () => number;
 // Environment (pluggable backend — D4)
 // ---------------------------------------------------------------------------
 
-export type EnvKind = "local" | "docker";
+export type EnvKind = "local" | "docker" | "sandbox";
 
 /** Terminal size in character cells. */
 export interface TermSize {
