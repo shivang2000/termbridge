@@ -32,3 +32,6 @@ tmp/
 
 # transient agent worktrees
 .claude/worktrees/
+
+# smoke-test scratch dirs
+.tb-smoke-*
