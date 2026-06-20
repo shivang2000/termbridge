@@ -1,0 +1,32 @@
+{
+	"name": "@termbridge/server",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"license": "MIT",
+	"bin": {
+		"termbridge-server": "./src/index.ts"
+	},
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"scripts": {
+		"build": "tsc",
+		"test": "bun test",
+		"typecheck": "tsc --noEmit",
+		"lint": "biome check ."
+	},
+	"dependencies": {
+		"@modelcontextprotocol/sdk": "^1.29.0",
+		"@termbridge/core": "workspace:*",
+		"@termbridge/mcp-server": "workspace:*",
+		"hono": "^4.8.2",
+		"zod": "^3.24.2"
+	},
+	"devDependencies": {
+		"@xterm/addon-fit": "^0.11.0",
+		"@xterm/addon-web-links": "^0.12.0",
+		"@xterm/xterm": "^6.0.0",
+		"vite": "^6.0.0"
+	}
+}
