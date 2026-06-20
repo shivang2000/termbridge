@@ -46,6 +46,10 @@ const BYPASS_ACCEPT = /^\s*[❯>]?\s*(\d+)\.\s+(?:Yes,?\s*)?I accept\b/im;
 /** Login paste prompt. */
 const PASTE = /paste\s+(?:the\s+)?code\b|paste\s+code\s+here/i;
 
+/** Startup "trust this folder" safety gate (option 1 = "Yes, I trust this folder"). */
+const TRUST = /trust this folder|is this a project you created or one you trust/i;
+const TRUST_ACCEPT = /^\s*[❯>]?\s*(\d+)\.\s+Yes,?\s*I trust\b/im;
+
 interface NumberedOption {
 	num: string;
 	label: string;
@@ -84,7 +88,20 @@ export const claudePermissionRecognizer: Recognizer = {
 			};
 		}
 
-		// 2. BYPASS PERMISSIONS accept.
+		// 2. TRUST FOLDER — startup safety gate (no "Do you want" wording).
+		if (TRUST.test(text)) {
+			const accept = TRUST_ACCEPT.exec(text);
+			const num = accept?.[1] ?? "1";
+			const options = parseOptions(lines).map((o) => o.label);
+			const question =
+				lines.map((l) => l.trim()).find((l) => TRUST.test(l)) ?? "Trust this folder?";
+			return {
+				data: { kind: "trust", question, options },
+				suggestedKeys: [num],
+			};
+		}
+
+		// 3. BYPASS PERMISSIONS accept.
 		if (BYPASS.test(text)) {
 			const accept = BYPASS_ACCEPT.exec(text);
 			const num = accept?.[1] ?? "2";
