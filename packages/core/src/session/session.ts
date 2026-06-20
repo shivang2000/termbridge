@@ -35,6 +35,8 @@ export interface SessionEnvironment {
 export type Sleep = (ms: number) => Promise<void>;
 
 export interface SessionDeps {
+	/** Registry id (SessionManager-assigned). Defaults to `name` when omitted. */
+	id?: string;
 	/** tmux session name this Session drives. */
 	name: string;
 	env: SessionEnvironment;
@@ -56,6 +58,7 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 const realSleep: Sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export class Session {
+	readonly id: string;
 	readonly name: string;
 	private readonly env: SessionEnvironment;
 	private readonly observer: PtyObserver;
@@ -69,6 +72,7 @@ export class Session {
 	private pendingTakeovers: RecognizedEvent[] = [];
 
 	constructor(deps: SessionDeps) {
+		this.id = deps.id ?? deps.name;
 		this.name = deps.name;
 		this.env = deps.env;
 		this.observer = deps.observer;

@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { ConcurrencyLimitError, SessionManager } from "./manager.js";
 import { PtyObserver } from "./observer/pty-observer.js";
 import type {
@@ -60,6 +60,13 @@ function build(maxSessions = 4) {
 }
 
 describe("SessionManager.open / lifecycle", () => {
+	test("the returned Session carries the registry id", async () => {
+		const { manager } = build();
+		const session = await manager.open();
+		expect(session.id).toBe("id1");
+		expect(manager.list()[0]?.id).toBe("id1");
+	});
+
 	test("open returns a Session and registers it with running state", async () => {
 		const { manager } = build();
 		const session = await manager.open();

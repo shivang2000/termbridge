@@ -200,6 +200,7 @@ export class SessionManager {
 		observer.start();
 
 		const session = new Session({
+			id,
 			name,
 			env,
 			observer,
