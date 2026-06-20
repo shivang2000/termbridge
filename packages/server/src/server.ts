@@ -94,7 +94,12 @@ export function createTermbridgeServer(opts: TermbridgeServerOptions): Termbridg
 						typeof evt.data === "string"
 							? evt.data
 							: new TextDecoder().decode(evt.data as ArrayBuffer);
-					await bridge?.handleMessage(data);
+					try {
+						await bridge?.handleMessage(data);
+					} catch {
+						// A failing tmux call (e.g. a dead pane) must not become an
+						// unhandled WS rejection — keep the socket alive.
+					}
 				},
 				onClose() {
 					if (timer) {

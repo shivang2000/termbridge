@@ -65,12 +65,19 @@ export function createBridge(session: BridgeSessionView, ws: WsLike): Bridge {
 		},
 
 		async handleMessage(raw: string) {
-			let msg: ClientFrame;
+			let parsed: unknown;
 			try {
-				msg = JSON.parse(raw) as ClientFrame;
+				parsed = JSON.parse(raw);
 			} catch {
 				return;
 			}
+			// Ignore anything that is not a JSON object: `null` (typeof "object"),
+			// arrays, and primitives (42 / "str" / true) carry no usable frame and
+			// must NOT crash the WS message handler (server.ts does not catch here).
+			if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+				return;
+			}
+			const msg = parsed as ClientFrame;
 			if (msg.type === "stdin" && typeof msg.data === "string") {
 				await session.sendHumanInput(msg.data);
 			} else if (msg.type === "resize" && Number.isFinite(msg.cols) && Number.isFinite(msg.rows)) {

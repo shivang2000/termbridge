@@ -317,3 +317,79 @@ describe("Session — web bridge surface (M5)", () => {
 		expect(got).toEqual(["hello"]);
 	});
 });
+
+describe("Session — web bridge surface (M5) ADVERSARIAL", () => {
+	test("onOutput unsubscribe removes ONLY that callback; the other keeps receiving", () => {
+		const observer = new PtyObserver({ clock: makeClock(0).clock });
+		const { session } = build({ observer });
+		const a: string[] = [];
+		const b: string[] = [];
+		const offA = session.onOutput((c) => a.push(c));
+		session.onOutput((c) => b.push(c));
+		observer.ingest("one");
+		offA(); // remove only A
+		observer.ingest("two");
+		expect(a).toEqual(["one"]); // A stopped at unsubscribe
+		expect(b).toEqual(["one", "two"]); // B unaffected
+	});
+
+	test("the SAME callback subscribed twice: one unsubscribe removes exactly one registration", () => {
+		const observer = new PtyObserver({ clock: makeClock(0).clock });
+		const { session } = build({ observer });
+		const got: string[] = [];
+		const cb = (c: string) => got.push(c);
+		const off1 = session.onOutput(cb);
+		session.onOutput(cb); // same fn, two registrations
+		observer.ingest("x"); // delivered twice
+		off1(); // removes only the first registration (indexOf finds first)
+		observer.ingest("y"); // delivered once (one registration remains)
+		expect(got).toEqual(["x", "x", "y"]);
+	});
+
+	test("calling an unsubscribe twice is harmless and does not remove a different callback", () => {
+		const observer = new PtyObserver({ clock: makeClock(0).clock });
+		const { session } = build({ observer });
+		const a: string[] = [];
+		const b: string[] = [];
+		const offA = session.onOutput((c) => a.push(c));
+		session.onOutput((c) => b.push(c));
+		offA();
+		offA(); // second call: indexOf returns -1 → no-op, must NOT splice B out
+		observer.ingest("z");
+		expect(a).toEqual([]);
+		expect(b).toEqual(["z"]); // B still subscribed
+	});
+
+	test("sendHumanInput flips the agent to human_driving for BOTH sendText and sendControl", async () => {
+		const { session, envh } = build();
+		await session.sendHumanInput("typed");
+		expect(envh.calls).toEqual([["send-keys", "-t", "s1", "-l", "typed"]]);
+		expect(await session.sendText("agent")).toEqual({ ok: false, error: "human_driving" });
+		expect(await session.sendControl("C-c")).toEqual({ ok: false, error: "human_driving" });
+		// no further tmux beyond the single human send — both agent writes refused
+		expect(envh.calls).toEqual([["send-keys", "-t", "s1", "-l", "typed"]]);
+	});
+
+	test("after the human window lapses the agent regains the lock (TTL expiry)", async () => {
+		const clock = makeClock(0);
+		const writeLock = new WriteLock({ clock: clock.clock, ttlMs: 3000 });
+		const { session, envh } = build({ clock: clock.clock, writeLock });
+		await session.sendHumanInput("h"); // human-active at t=0
+		expect(await session.sendText("blocked")).toEqual({ ok: false, error: "human_driving" });
+		clock.advance(3001); // window lapses
+		const res = await session.sendText("now allowed", { enter: false });
+		expect(res).toEqual({ ok: true });
+		expect(envh.calls).toContainEqual(["send-keys", "-t", "s1", "-l", "now allowed"]);
+	});
+
+	test("sendHumanInput queues exactly one human_took_over even across repeated human input", async () => {
+		const { session } = build({ screen: "idle" });
+		await session.sendHumanInput("a");
+		await session.sendHumanInput("b");
+		// agent attempts and is refused — the takeover is announced once
+		await session.sendText("x");
+		await session.sendText("y");
+		const { events } = await session.readEvents();
+		expect(events.filter((e) => e.kind === "human_took_over")).toHaveLength(1);
+	});
+});
