@@ -18,10 +18,15 @@ It generalizes two sibling repos: `~/dev/sentry-fixer-bot` (`alertforge`) = the 
 (xterm ↔ WS ↔ PTY + OAuth-URL bridge), and `~/dev/paperclip` = the agent↔execution-env half (adapters +
 E2B/Daytona/Cloudflare sandbox providers + workspace-runtime + MCP server).
 
-## Status (2026-06-18)
+## Status (2026-06-21) — v0.1.0
 
-**Design complete; NO runtime code yet.** Repo holds docs only. Design spec is written and committed and
-awaiting the user's review. After review → write the implementation plan → then code.
+**M1–M6 complete + final acceptance passed.** Built: `packages/core` (SessionManager/Session/Environment
+[Local/Docker/Sandbox]/PtyObserver/WriteLock/recognizers/AuthProvisioner), `packages/mcp-server` (stdio,
+12-tool §6 surface), `packages/server` (unified Bun+Hono: web WS bridge + HTTP tool API, token-gated +
+loopback), `packages/claude-code-plugin`. ~500 unit tests; real-tmux/Docker/MCP/web/auth/acceptance smokes
+green. Final acceptance: an agent piloted real logged-in `claude` via the tool surface to edit a bound git
+repo while a human watched — subscription auth, no API key. Pending: live cloud-sandbox provider (E2B, needs
+creds) and `npm publish` (gated — ask first). Web bridge uses tmux primitives, not node-pty (fails under Bun).
 
 ## Decisions (D1–D8) — authority is `docs/superpowers/specs/2026-06-18-termbridge-design.md`
 
@@ -54,6 +59,7 @@ awaiting the user's review. After review → write the implementation plan → t
 
 ## Next step
 
-Run **`/superpowers:writing-plans`** against the spec to produce the implementation plan. First milestone
-**M1**: `packages/core` — `TerminalEnvironment` interface + tmux helpers + `LocalEnvironment` + `Session` +
-`PtyObserver` + unit tests. No code until that plan is approved.
+v0.1.0 shipped (tag `v0.1.0`). Remaining/optional: ship a concrete cloud `SandboxProvider` (E2B — needs
+`E2B_API_KEY`) and live-test it; consider a streamable-HTTP MCP transport on `packages/server`; ask before
+`npm publish`. To run: `bun install` → `bun run test` → see README Quickstart. Verify end-to-end with
+`scripts/accept-final.ts` (in Docker, reusing `~/.termbridge/home` creds).

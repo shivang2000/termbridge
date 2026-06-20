@@ -1,57 +1,86 @@
 # termbridge
 
-> **Working name — rename freely.** One terminal session that an AI agent (via code/MCP) and a
-> human (via a website) attach to at the **same time**.
+> One terminal session that an **AI agent** (via MCP) and a **human** (via a browser) drive at the
+> **same time** — so an agent can pilot **Claude Code** (and other interactive CLIs) like a human, on a
+> **subscription, not metered API**.
 
-`termbridge` is a reusable component that lets AI agents — Claude Code, Cursor, Codex, a custom
-"Hermes" agent, or anything that speaks the Model Context Protocol (MCP) — **run and interact with a
-real terminal/shell session programmatically**, while a human can simultaneously **watch and type into
-the same session from a browser**.
+A session is a named **tmux** session inside a pluggable **environment** (local host, a Docker container,
+or a cloud sandbox). The agent drives it through MCP tools that shell out to tmux (`send-keys`,
+`capture-pane`, `pipe-pane`) and never holds the attachment. The human opens a browser `xterm.js` whose
+WebSocket bridge streams the same pane and types into it. Because both target one tmux session, they are
+co-present and live; a `WriteLock` arbitrates so the human can take over and the agent auto-resumes.
 
-**A primary motivating use case:** let a **Hermes agent — or any open-source agent — *use Claude Code***
-(and other interactive CLIs) by driving it inside the shared terminal, while a human can still watch and
-step in. termbridge is the bridge that makes an interactive CLI agent programmatically operable by another
-agent.
+The point: run coding work on a **Claude Code subscription** — log in once, and every session reuses the
+shared credentials, so usage bills against the plan instead of the API.
 
-It is the missing integration of two halves that already exist separately in our other projects:
+## Status — v0.1.0
 
-- **Human ↔ web terminal** — proven in [`sentry-fixer-bot`](../sentry-fixer-bot) (`alertforge`):
-  `xterm.js` in the browser ↔ WebSocket ↔ a server-side PTY running `claude`/`bash`, including driving
-  OAuth logins through the browser.
-- **Agent ↔ execution environment** — proven in [`paperclip`](../paperclip): adapter + sandbox-provider
-  plugins (E2B/Daytona/Cloudflare), a workspace-runtime model, and an MCP server.
+Milestones **M1–M6 complete**, plus the **final acceptance**: an agent piloted a real logged-in `claude`
+TUI through the MCP tool surface to edit a file in a bound git repo (`Hello, World!` → `Hello, termbridge!`)
+while a human watched live — on subscription auth, no API key. ~500 unit tests; real-tmux / Docker / MCP /
+web / auth / acceptance smokes all green.
 
-The integration that makes both attach to **one** session is built on **tmux as a shared substrate**.
-
-## Status
-
-📋 **Planning / scaffolding.** No runtime code yet. This repo currently contains the detailed plan and
-architecture docs. See [`docs/PLAN.md`](docs/PLAN.md).
-
-## How it works (one paragraph)
-
-Each session is a named **tmux** session living inside a pluggable **environment** (local host or a
-Docker container; cloud sandboxes later). The **agent** drives it through MCP tools that shell out to
-tmux (`send-keys`, `capture-pane`) and never hold the attachment. The **human** opens a browser
-`xterm.js` whose WebSocket bridge runs `tmux attach` against the same tmux server. Because both target
-the same session, they are co-present and live; tmux gives session persistence and reconnect for free.
-
-## Planned packages
+## Packages
 
 | Package | Role |
 |---|---|
-| `packages/core` | Framework-agnostic session + environment library (`TerminalEnvironment`, tmux helpers) |
-| `packages/mcp-server` | MCP server exposing terminal tools to any agent (built first, after core) |
-| `packages/web` | `xterm.js` frontend + WebSocket bridge (`tmux attach` PTY) |
-| `packages/claude-code-plugin` | *(later)* turnkey Claude Code plugin + wake-on-terminal-event |
+| `packages/core` | Framework-agnostic library: `SessionManager`, `Session`, `Environment` (`Local`/`Docker`/`Sandbox`), `PtyObserver`, `WriteLock`, recognizers (`oauth-url`, `claude-permission`, `generic-yn`), `AuthProvisioner` |
+| `packages/mcp-server` | MCP **stdio** server exposing the §6 tool surface (12 tools) over core |
+| `packages/server` | Unified Bun+Hono server: web WS bridge (watch + intervene) + HTTP tool API, one shared `SessionManager` |
+| `packages/claude-code-plugin` | Turnkey Claude Code plugin that registers the termbridge MCP server |
+
+## Quickstart
+
+Prereqs: **bun ≥1.3**, **tmux ≥3.0**, **docker** (for the fleet/auth), **claude** CLI.
+
+```bash
+bun install
+bun run test            # turbo: typecheck + lint + unit tests (all mocked; spawns nothing)
+```
+
+**Run real sessions in Docker** (host tmux is never touched; termbridge pins a dedicated `-L termbridge`
+socket and binds loopback):
+
+```bash
+docker build -t termbridge:dev -f docker/Dockerfile .   # bun + tmux + node + claude + git
+```
+
+**One-time subscription login** (creds persist on a volume, shared by every session):
+
+```bash
+mkdir -p ~/.termbridge/home
+docker run -it --rm -v ~/.termbridge/home:/creds -e HOME=/creds termbridge:dev claude
+# choose "Claude account with subscription", open the printed URL, paste the code.
+# A second container with the same -v reuses the login — no re-auth.
+```
+
+**Give an agent the tools** (MCP, stdio):
+
+```bash
+claude mcp add termbridge -- bun /ABS/PATH/termbridge/packages/mcp-server/src/stdio.ts
+```
+
+**Run the unified server** (agent HTTP tool API + human web UI, one shared session registry):
+
+```bash
+TERMBRIDGE_HOME=~/.termbridge/home bun packages/server/src/index.ts
+# prints:  [termbridge] server on http://127.0.0.1:8787  (token: <TOKEN>)
+# human UI:  http://127.0.0.1:8787/?session=<id>&token=<TOKEN>
+# agent:     POST http://127.0.0.1:8787/api/tool/<name>?token=<TOKEN>  {json args}
+```
+
+## Security
+
+The server is a session-piloting control plane (`send_text` ≈ remote command execution), so it: binds
+**loopback** by default (`HOST` to opt out), requires a **bearer token** (`TERMBRIDGE_TOKEN` or a generated
+one, constant-time checked) on the WS + tool API, and enforces an **Origin allowlist** on the WS upgrade
+(CSWSH defence). Run it behind your own auth/TLS before exposing it.
 
 ## Docs
 
-- [`docs/PLAN.md`](docs/PLAN.md) — extremely detailed implementation plan
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — design, data flow, reuse map
-- [`docs/RESEARCH.md`](docs/RESEARCH.md) — cited research behind the design
-- [`docs/DECISIONS.md`](docs/DECISIONS.md) — key decisions and rationale (ADRs)
+- `docs/superpowers/specs/2026-06-18-termbridge-design.md` — the design spec (decisions D1–D8).
+- `docs/superpowers/plans/` — per-milestone implementation plans (M1–M6).
 
 ## License
 
-TBD.
+MIT.
