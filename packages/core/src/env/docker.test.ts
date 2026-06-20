@@ -601,3 +601,26 @@ describe("DockerEnvironment (adversarial)", () => {
 		expect(calls[4]?.args[1]).toBe("termbridge-second");
 	});
 });
+
+describe("DockerEnvironment HOME credentials mount (M4)", () => {
+	it("bind-mounts an absolute HOME and passes it via -e", async () => {
+		const { exec, calls } = makeExec();
+		await new DockerEnvironment({ exec }).ensureSession({
+			...baseOpts,
+			env: { HOME: "/creds/home" },
+		});
+		const runArgs = calls[0]?.args ?? [];
+		expect(runArgs).toContain("/creds/home:/creds/home");
+		expect(runArgs).toContain("-e");
+		expect(runArgs).toContain("HOME=/creds/home");
+	});
+
+	it("does not mount a non-absolute HOME", async () => {
+		const { exec, calls } = makeExec();
+		await new DockerEnvironment({ exec }).ensureSession({
+			...baseOpts,
+			env: { HOME: "relative" },
+		});
+		expect(calls[0]?.args).not.toContain("relative:relative");
+	});
+});

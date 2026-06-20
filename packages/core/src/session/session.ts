@@ -68,8 +68,8 @@ export class Session {
 	private readonly sleep: Sleep;
 	private readonly pollMs: number;
 
-	/** Queued human_took_over events awaiting collection by readEvents(). */
-	private pendingTakeovers: RecognizedEvent[] = [];
+	/** Events queued for the next readEvents() — human_took_over, needs_login, … */
+	private pendingEvents: RecognizedEvent[] = [];
 
 	constructor(deps: SessionDeps) {
 		this.id = deps.id ?? deps.name;
@@ -185,12 +185,20 @@ export class Session {
 		const screen = await this.readScreen();
 		const { data: recentBytes, nextOffset } = this.observer.buffer(opts.sinceOffset);
 
-		const takeovers = this.pendingTakeovers;
-		this.pendingTakeovers = [];
+		const queued = this.pendingEvents;
+		this.pendingEvents = [];
 
 		const recognized = this.pipeline.process(screen, recentBytes);
 
-		return { events: [...takeovers, ...recognized], nextOffset };
+		return { events: [...queued, ...recognized], nextOffset };
+	}
+
+	/**
+	 * Queue an out-of-band event (e.g. needs_login) for the next readEvents().
+	 * Used by SessionManager to surface state the recognizers can't see on screen.
+	 */
+	queueEvent(event: RecognizedEvent): void {
+		this.pendingEvents.push(event);
 	}
 
 	/** Resize the tmux window (live resize is honoured by attached humans). */
@@ -214,7 +222,7 @@ export class Session {
 			return { ok: true };
 		}
 		if (this.writeLock.justTookOver()) {
-			this.pendingTakeovers.push({
+			this.pendingEvents.push({
 				kind: "human_took_over",
 				data: {},
 				suggestedKeys: [],

@@ -59,6 +59,12 @@ export class DockerEnvironment implements Environment {
 
 		const envFlags = Object.entries(opts.env ?? {}).flatMap(([k, v]) => ["-e", `${k}=${v}`]);
 
+		// Bind-mount the credentials HOME at the same path so the one subscription
+		// login persists on the host and is shared across containers (AuthProvisioner,
+		// M4). Only absolute paths are mounted.
+		const homeDir = opts.env?.HOME;
+		const homeMount = homeDir?.startsWith("/") ? ["-v", `${homeDir}:${homeDir}`] : [];
+
 		// 1) Start the long-lived container (`tail -f /dev/null` keeps it alive so
 		//    we can `docker exec` tmux into it on subsequent calls).
 		const run = await this.exec("docker", [
@@ -69,6 +75,7 @@ export class DockerEnvironment implements Environment {
 			"-v",
 			`${opts.cwd}:${opts.cwd}`,
 			...(this.pipeDir ? ["-v", `${this.pipeDir}:${this.pipeDir}`] : []),
+			...homeMount,
 			"-w",
 			opts.cwd,
 			...envFlags,

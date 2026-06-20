@@ -13,9 +13,12 @@ import { mkdirSync, mkdtempSync } from "node:fs";
 import { open as openFile, stat as statFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { AuthProvisioner } from "./auth/provisioner.js";
 import { DockerEnvironment } from "./env/docker.js";
 import { LocalEnvironment } from "./env/local.js";
 import { PtyObserver, type ReadAppended } from "./observer/pty-observer.js";
+import { claudePermissionRecognizer } from "./recognizers/claude-permission.js";
+import { genericYnRecognizer } from "./recognizers/generic-yn.js";
 import { oauthUrlRecognizer } from "./recognizers/oauth-url.js";
 import { RecognizerPipeline } from "./recognizers/pipeline.js";
 import { Session } from "./session/session.js";
@@ -64,6 +67,12 @@ export interface SessionManagerOptions {
 	exec?: ExecFn;
 	/** Dedicated tmux socket name for the default LocalEnvironment (safety isolation). */
 	socket?: string;
+	/**
+	 * Persistent credentials volume (becomes each session's HOME) for shared
+	 * subscription auth. Defaults to TERMBRIDGE_HOME; when neither is set, sessions
+	 * inherit the ambient HOME and no auth provisioning is applied.
+	 */
+	homeDir?: string;
 }
 
 interface Entry {
@@ -138,6 +147,7 @@ export class SessionManager {
 	private readonly observerFactory: (pipeFile: string) => PtyObserver;
 	private readonly idGen: () => string;
 	private readonly pipeDir: string;
+	private readonly auth: AuthProvisioner | undefined;
 
 	private readonly sessions = new Map<string, Entry>();
 
@@ -168,6 +178,9 @@ export class SessionManager {
 			((pipeFile: string) => new PtyObserver({ readAppended: makeFileTailer(pipeFile) }));
 		this.idGen = opts.idGen ?? randomId;
 		this.pipeDir = opts.pipeDir ?? resolveDefaultPipeDir();
+		const homeDir = opts.homeDir ?? process.env.TERMBRIDGE_HOME;
+		this.auth = homeDir ? new AuthProvisioner({ homeDir }) : undefined;
+		this.auth?.ensureReady();
 	}
 
 	/**
@@ -201,6 +214,10 @@ export class SessionManager {
 				cmd: opts.cmd,
 				cols: opts.cols ?? 500,
 				rows: opts.rows ?? 40,
+				// Point HOME at the shared credentials volume so claude reads the one
+				// subscription login (delivered as tmux -e / docker -e). Undefined when
+				// no creds volume is configured → session inherits the ambient HOME.
+				env: this.auth?.homeEnv(),
 			});
 
 			await env.tmux(["pipe-pane", "-O", "-t", name, `cat >> ${pipeFile}`]);
@@ -212,6 +229,8 @@ export class SessionManager {
 		const observer = this.observerFactory(pipeFile);
 		const pipeline = new RecognizerPipeline();
 		pipeline.register(oauthUrlRecognizer);
+		pipeline.register(claudePermissionRecognizer);
+		pipeline.register(genericYnRecognizer);
 		observer.start();
 
 		const session = new Session({
@@ -222,6 +241,16 @@ export class SessionManager {
 			pipeline,
 			writeLock: new WriteLock(),
 		});
+
+		// Surface a needs_login event up-front when the shared creds volume has no
+		// login yet — the agent/human then drives `claude auth login` (spec §9).
+		if (this.auth && !this.auth.isLoggedIn()) {
+			session.queueEvent({
+				kind: "needs_login",
+				data: { homeDir: this.auth.homeDir },
+				suggestedKeys: [],
+			});
+		}
 
 		const info: SessionInfo = { id, name, env: kind, state };
 		this.sessions.set(id, { session, info });

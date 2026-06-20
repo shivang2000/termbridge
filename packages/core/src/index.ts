@@ -3,12 +3,16 @@
 // recognizers (registry + url-detector + oauth-url), PtyObserver,
 // LocalEnvironment, Session, and SessionManager.
 
+// shared subscription auth (creds volume)
+export * from "./auth/provisioner.js";
 // pluggable execution backend (D4)
 export * from "./env/docker.js";
 export * from "./env/local.js";
 export * from "./manager.js";
 // per-session PTY observer (D6)
 export * from "./observer/pty-observer.js";
+export * from "./recognizers/claude-permission.js";
+export * from "./recognizers/generic-yn.js";
 export * from "./recognizers/oauth-url.js";
 export * from "./recognizers/pipeline.js";
 // pluggable prompt recognizers (D7)

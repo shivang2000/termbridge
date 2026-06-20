@@ -250,3 +250,61 @@ describe("SessionManager env selection", () => {
 		expect(manager.list()).toEqual([]);
 	});
 });
+
+describe("SessionManager auth + recognizer wiring (M4)", () => {
+	test("sets HOME from the creds volume and queues needs_login when logged out", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "tb-home-test-"));
+		try {
+			const made = makeEnv();
+			const manager = new SessionManager({
+				homeDir: dir, // empty dir -> not logged in
+				envFactory: () => made.env,
+				observerFactory: () => new PtyObserver({ clock: () => 0 }),
+				idGen: () => "h1",
+			});
+			const session = await manager.open();
+			expect(made.ensured[0]?.env?.HOME).toBe(dir);
+			const { events } = await session.readEvents();
+			expect(events.some((e) => e.kind === "needs_login")).toBe(true);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	test("no auth provisioning (no HOME, no needs_login) when no creds volume", async () => {
+		const prev = process.env.TERMBRIDGE_HOME;
+		delete process.env.TERMBRIDGE_HOME;
+		try {
+			const made = makeEnv();
+			const manager = new SessionManager({
+				envFactory: () => made.env,
+				observerFactory: () => new PtyObserver({ clock: () => 0 }),
+				idGen: () => "n1",
+			});
+			const session = await manager.open();
+			expect(made.ensured[0]?.env).toBeUndefined();
+			const { events } = await session.readEvents();
+			expect(events.some((e) => e.kind === "needs_login")).toBe(false);
+		} finally {
+			if (prev !== undefined) process.env.TERMBRIDGE_HOME = prev;
+		}
+	});
+
+	test("registered recognizers fire through readEvents (generic-yn)", async () => {
+		const made = makeEnv();
+		made.env.tmux = (args: string[]) =>
+			Promise.resolve(
+				args[0] === "capture-pane"
+					? { stdout: "Proceed? [y/N]", stderr: "", code: 0 }
+					: { stdout: "", stderr: "", code: 0 },
+			);
+		const manager = new SessionManager({
+			envFactory: () => made.env,
+			observerFactory: () => new PtyObserver({ clock: () => 0 }),
+			idGen: () => "r1",
+		});
+		const session = await manager.open();
+		const { events } = await session.readEvents();
+		expect(events.some((e) => e.kind === "generic-yn")).toBe(true);
+	});
+});
