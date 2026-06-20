@@ -12,6 +12,7 @@ RUN apt-get update \
 		tmux \
 		nodejs \
 		npm \
+		git \
 		ca-certificates \
 		procps \
 	&& rm -rf /var/lib/apt/lists/*
