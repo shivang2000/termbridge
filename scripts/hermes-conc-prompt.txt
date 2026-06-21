@@ -1,0 +1,20 @@
+You are testing a concurrency limit through the **termbridge** MCP tools. The
+session limit is 2. Use ONLY termbridge tools. Do NOT use any local shell.
+
+Perform EXACTLY these steps:
+
+1. open_session { "env": "docker", "cmd": "bash", "cwd": "/tmp" }  → call it A. Remember A's id.
+2. open_session { "env": "docker", "cmd": "bash", "cwd": "/tmp" }  → call it B. Remember B's id.
+3. open_session { "env": "docker", "cmd": "bash", "cwd": "/tmp" }  → this is the THIRD open.
+   IMPORTANT: this third open is EXPECTED to FAIL because the limit is 2. The
+   error will mention a session/concurrency limit (e.g. "session limit reached"
+   or code "concurrency_limit"). That failure is the SUCCESS condition — do NOT
+   retry it, do NOT treat it as a problem.
+4. list_sessions  → confirm there are EXACTLY 2 sessions (A and B).
+5. close_session for A's id, then close_session for B's id.
+6. list_sessions  → confirm 0 sessions remain.
+
+Finally output ONE line:
+  - "RESULT: PASS" if the first two opens succeeded, the third was rejected with
+    a session/concurrency limit error, list showed exactly 2, and both closed cleanly.
+  - otherwise "RESULT: FAIL" followed by a short explanation of what actually happened.
