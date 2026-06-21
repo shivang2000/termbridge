@@ -69,12 +69,17 @@ ws.addEventListener("message", (e) => {
 
 term.onData(send);
 
-window.addEventListener("resize", () => {
+function sendResize(): void {
 	tryFit();
 	if (ws.readyState === WebSocket.OPEN) {
 		ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
 	}
-});
+}
+
+// On connect, fit to the browser and resize the tmux window to match so the
+// pane redraws at the viewport width (avoids ragged wrapping from the open size).
+ws.addEventListener("open", () => setTimeout(sendResize, 50));
+window.addEventListener("resize", sendResize);
 
 function renderEvents(events: RecognizedEvent[]): void {
 	if (!eventsEl) {
