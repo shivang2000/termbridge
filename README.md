@@ -55,6 +55,19 @@ built (walkthrough below). *Fetching* the ticket from Jira is the agent's job �
 tool/MCP; termbridge pilots Claude, it doesn't pull from Jira. Run it today with no Jira tool by pasting
 the ticket text into `scripts/engineer.ts`.
 
+## Ways to use it
+
+| You are… | You do… | Where |
+|---|---|---|
+| **In chat (the headline)** | Drop a ticket to an agent (Hermes) that has termbridge + the `engineer-loop` skill — it pilots Claude Code and streams the review back to your channel. | [headline flow](#the-headline-flow--chat-a-ticket-watch-it-ship) · [hermes.md](docs/integration/hermes.md) |
+| **A dev on a laptop** | `docker run … shivang2000/termbridge` → log in at `/login` → `bun scripts/engineer.ts --goal "PROJ-123: …"`. Watch in the browser. | [Walkthrough](#walkthrough--set-it-up-on-your-laptop-and-hand-off-a-ticket) |
+| **A Claude Code / MCP-agent user** | `claude mcp add termbridge …` — your agent gains 13 tools to pilot a *second* `claude` (parallel / sandboxed work). | [Usage A](#a-give-claude-code-or-any-mcp-client-the-tools--stdio) |
+| **Building an orchestrator** | Use `@termbridge/orchestrator`'s `runEngineerLoop`, or the raw tools over a `ToolCall`, to build your own fleet. | [Usage D](#d-autonomous-engineering-loop-iterate-until-done--live-progress) |
+| **Watching / reviewing** | Open the web UI on any session — live pane + activity feed; type to take over (`WriteLock`), review the diff. | [Usage B](#b-watch--intervene-from-a-browser--the-unified-server) |
+| **Running it for a team** | Host the unified server (token + loopback + Origin allowlist); pin untrusted callers with `TERMBRIDGE_ALLOWED_ENVS=docker`; cap with `TERMBRIDGE_MAX_SESSIONS`. | [Security](#security) |
+
+All of these pilot `claude` on your **subscription** (not metered API), one shared login.
+
 ## How it works
 
 ```
