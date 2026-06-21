@@ -24,18 +24,31 @@ export interface PtyObserverOptions {
 	readAppended?: ReadAppended;
 	/** Poll interval for the loop started by `start()`. Defaults to 50ms. */
 	pollMs?: number;
+	/**
+	 * Cap on the rolling buffer size (in chars/bytes). Once exceeded, the oldest
+	 * bytes are dropped from the FRONT so only the most recent `maxBufferBytes`
+	 * are retained. `totalBytes` (the offset cursor) keeps counting ALL bytes
+	 * ever seen and is never reset. Defaults to 262144 (256 KiB).
+	 */
+	maxBufferBytes?: number;
 }
 
 const DEFAULT_POLL_MS = 50;
+const DEFAULT_MAX_BUFFER_BYTES = 262144;
 
 export class PtyObserver {
 	private readonly clock: Clock;
 	private readonly readAppended: ReadAppended | undefined;
 	private readonly pollMs: number;
+	private readonly maxBufferBytes: number;
 
-	/** Rolling buffer of everything observed so far. */
+	/** Rolling buffer of recently observed bytes (capped to `maxBufferBytes`). */
 	private buf = "";
-	/** Total bytes ever ingested (monotonic; equals buf.length here). */
+	/**
+	 * Total bytes ever ingested (monotonic offset cursor). Counts ALL bytes ever
+	 * seen — it is NOT reset when the rolling buffer is trimmed, so the retained
+	 * window is always `[totalBytes - buf.length, totalBytes)`.
+	 */
 	private totalBytes = 0;
 	/** Timestamp (clock units) of the most recent ingest. */
 	private lastActivity: number;
@@ -50,6 +63,7 @@ export class PtyObserver {
 		this.clock = opts.clock ?? (() => Date.now());
 		this.readAppended = opts.readAppended;
 		this.pollMs = opts.pollMs ?? DEFAULT_POLL_MS;
+		this.maxBufferBytes = opts.maxBufferBytes ?? DEFAULT_MAX_BUFFER_BYTES;
 		// Seed activity at construction time so `waitForIdle` has a sane baseline
 		// before any output arrives.
 		this.lastActivity = this.clock();
@@ -71,6 +85,15 @@ export class PtyObserver {
 
 		this.buf += chunk;
 		this.totalBytes += chunk.length;
+
+		// Cap the rolling buffer to bound memory over long sessions. Drop the
+		// OLDEST bytes from the front so only the most recent `maxBufferBytes`
+		// remain. `totalBytes` is the monotonic offset cursor — it counts every
+		// byte ever seen and is NOT reset; the retained window is therefore
+		// `[totalBytes - buf.length, totalBytes)`.
+		if (this.buf.length > this.maxBufferBytes) {
+			this.buf = this.buf.slice(this.buf.length - this.maxBufferBytes);
+		}
 
 		// Snapshot subscribers BEFORE delivering so that a callback which
 		// subscribes during delivery does not receive the in-flight chunk (and
@@ -106,11 +129,21 @@ export class PtyObserver {
 
 	/**
 	 * Return the bytes seen since `sinceOffset` along with the new total offset.
-	 * Omitting `sinceOffset` (or passing 0 / a negative value) returns the whole
-	 * buffer. Offsets beyond the end clamp to an empty slice.
+	 * Omitting `sinceOffset` (or passing 0 / a negative value) returns whatever
+	 * is currently retained from the start of the buffer. Offsets beyond the end
+	 * clamp to an empty slice.
+	 *
+	 * Because the rolling buffer is capped, only the most recent
+	 * `maxBufferBytes` are retained; the live window is
+	 * `[totalBytes - buf.length, totalBytes)`. If `sinceOffset` falls before the
+	 * window start (the requested older bytes were already dropped), we return
+	 * from the window start (i.e. the whole retained buffer). If it falls inside
+	 * the window we return only the slice after it. `nextOffset` is always the
+	 * monotonic total so callers keep advancing correctly.
 	 */
 	buffer(sinceOffset?: number): ReadOutputResult {
 		const total = this.totalBytes;
+		const windowStart = total - this.buf.length;
 
 		let from = sinceOffset ?? 0;
 		if (from < 0) {
@@ -120,8 +153,13 @@ export class PtyObserver {
 			from = total;
 		}
 
+		// If the caller asked for bytes older than what we still retain, those
+		// bytes were dropped by the cap — serve from the window start so we never
+		// produce a stale or negative slice index.
+		const sliceFrom = from < windowStart ? 0 : from - windowStart;
+
 		return {
-			data: this.buf.slice(from),
+			data: this.buf.slice(sliceFrom),
 			nextOffset: total,
 		};
 	}

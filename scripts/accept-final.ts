@@ -96,7 +96,10 @@ try {
 	}
 
 	const finalText = fileText();
-	assert(done && finalText.includes(MARKER), `claude edited the bound repo file\n--- ${FILE} ---\n${finalText}`);
+	assert(
+		done && finalText.includes(MARKER),
+		`claude edited the bound repo file\n--- ${FILE} ---\n${finalText}`,
+	);
 	console.log(`[accept] ✓ claude made the change: ${JSON.stringify(finalText.trim())}`);
 	assert(seen.join("").length > 0, "human WS streamed the live session");
 	console.log("[accept] ✓ human watched the same session live over the WS");
@@ -104,9 +107,13 @@ try {
 	ws.close();
 	await tool("close_session", { id });
 	id = undefined;
-	console.log("\n[accept] FINAL ACCEPTANCE PASSED ✅  (real claude, subscription auth, repo change, human co-present)");
+	console.log(
+		"\n[accept] FINAL ACCEPTANCE PASSED ✅  (real claude, subscription auth, repo change, human co-present)",
+	);
 } catch (err) {
-	console.error(`\n[accept] FINAL ACCEPTANCE FAILED ❌\n${err instanceof Error ? err.stack : String(err)}`);
+	console.error(
+		`\n[accept] FINAL ACCEPTANCE FAILED ❌\n${err instanceof Error ? err.stack : String(err)}`,
+	);
 	process.exitCode = 1;
 } finally {
 	if (id) await manager.close(id).catch(() => {});

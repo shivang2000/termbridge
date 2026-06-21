@@ -151,6 +151,13 @@ export class SessionManager {
 	private readonly auth: AuthProvisioner | undefined;
 
 	private readonly sessions = new Map<string, Entry>();
+	/**
+	 * Slots reserved synchronously by in-flight `open()` calls that have passed the
+	 * cap check but not yet registered their Session. Counting these alongside
+	 * `sessions.size` closes the TOCTOU race where concurrent `open()` calls all
+	 * clear the cap before any of them registers, letting the limit be exceeded.
+	 */
+	private reserved = 0;
 
 	constructor(opts: SessionManagerOptions = {}) {
 		this.maxSessions = opts.maxSessions ?? defaultMaxSessions();
@@ -190,39 +197,48 @@ export class SessionManager {
 	 * environment is supported in M1; an unknown kind is rejected by the factory.
 	 */
 	async open(opts: OpenSessionOptions = {}): Promise<Session> {
-		if (this.sessions.size >= this.maxSessions) {
+		// Reserve a slot SYNCHRONOUSLY (before the first await) so concurrent
+		// open() calls cannot all clear the cap and then exceed it. `reserved`
+		// counts in-flight opens; on success we register the Session, and we
+		// ALWAYS release the reservation in finally (a failed open frees its slot).
+		if (this.sessions.size + this.reserved >= this.maxSessions) {
 			throw new ConcurrencyLimitError(this.maxSessions);
 		}
+		this.reserved++;
 
-		const kind: EnvKind = opts.env ?? "local";
-		// pipeFile lives under pipeDir; Docker bind-mounts pipeDir so the host
-		// observer can tail the in-container pipe-pane output.
-		const env = this.envFactory(kind, { pipeDir: this.pipeDir });
-
-		const id = this.idGen();
-		const name = opts.name ?? `tb-${id}`;
-		const cwd = opts.cwd ?? process.cwd();
-
-		let state: SessionState = "running";
 		try {
-			await env.ensureSession({
-				name,
-				cwd,
-				cmd: opts.cmd,
-				cols: opts.cols ?? 500,
-				rows: opts.rows ?? 40,
-				// Point HOME at the shared credentials volume so claude reads the one
-				// subscription login (delivered as tmux -e / docker -e). Undefined when
-				// no creds volume is configured → session inherits the ambient HOME.
-				env: this.auth?.homeEnv(),
-			});
-		} catch (err) {
-			state = "failed";
-			throw err;
-		}
+			const kind: EnvKind = opts.env ?? "local";
+			// pipeFile lives under pipeDir; Docker bind-mounts pipeDir so the host
+			// observer can tail the in-container pipe-pane output.
+			const env = this.envFactory(kind, { pipeDir: this.pipeDir });
 
-		const { session } = await this.buildSession(id, name, kind, env, state);
-		return session;
+			const id = this.idGen();
+			const name = opts.name ?? `tb-${id}`;
+			const cwd = opts.cwd ?? process.cwd();
+
+			let state: SessionState = "running";
+			try {
+				await env.ensureSession({
+					name,
+					cwd,
+					cmd: opts.cmd,
+					cols: opts.cols ?? 500,
+					rows: opts.rows ?? 40,
+					// Point HOME at the shared credentials volume so claude reads the one
+					// subscription login (delivered as tmux -e / docker -e). Undefined when
+					// no creds volume is configured → session inherits the ambient HOME.
+					env: this.auth?.homeEnv(),
+				});
+			} catch (err) {
+				state = "failed";
+				throw err;
+			}
+
+			const { session } = await this.buildSession(id, name, kind, env, state);
+			return session;
+		} finally {
+			this.reserved--;
+		}
 	}
 
 	/**

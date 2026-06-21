@@ -36,3 +36,7 @@ tmp/
 # smoke-test scratch dirs
 .tb-smoke-*
 .dogfood-*
+
+# local debug artifacts (web-UI screenshots, playwright snapshots)
+termbridge-watch*.png
+.playwright-mcp/
