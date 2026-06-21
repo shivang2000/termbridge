@@ -1,7 +1,6 @@
 {
 	"name": "@termbridge/mcp-server",
 	"version": "1.0.1",
-	"private": true,
 	"type": "module",
 	"license": "MIT",
 	"bin": {
@@ -28,14 +27,14 @@
 		}
 	},
 	"scripts": {
-		"build": "tsc",
+		"build": "tsc -p tsconfig.build.json",
 		"test": "bun test",
 		"typecheck": "tsc --noEmit",
 		"lint": "biome check ."
 	},
 	"dependencies": {
 		"@modelcontextprotocol/sdk": "^1.29.0",
-		"@termbridge/core": "workspace:*",
+		"@termbridge/core": "^1.0.1",
 		"zod": "^3.24.2"
 	}
 }

@@ -1,7 +1,6 @@
 {
 	"name": "@termbridge/orchestrator",
 	"version": "1.0.1",
-	"private": true,
 	"type": "module",
 	"license": "MIT",
 	"exports": {
@@ -22,7 +21,7 @@
 		}
 	},
 	"scripts": {
-		"build": "tsc",
+		"build": "tsc -p tsconfig.build.json",
 		"test": "bun test",
 		"typecheck": "tsc --noEmit",
 		"lint": "biome check ."
