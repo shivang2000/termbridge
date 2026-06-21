@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ConcurrencyLimitError, SessionManager } from "./manager.js";
+import { ConcurrencyLimitError, EnvNotAllowedError, SessionManager } from "./manager.js";
 import { PtyObserver } from "./observer/pty-observer.js";
 import type {
 	EnsureSessionOptions,
@@ -623,5 +623,157 @@ describe("SessionManager auth + recognizer wiring (M4)", () => {
 		const session = await manager.open();
 		const { events } = await session.readEvents();
 		expect(events.some((e) => e.kind === "generic-yn")).toBe(true);
+	});
+});
+
+describe("SessionManager env policy (docker-only guard)", () => {
+	/** Build a manager wired with a fake env + the given env policy. */
+	function guarded(opts: { allowedEnvs?: EnvKind[]; defaultEnv?: EnvKind; idGen?: string }) {
+		const made = makeEnv();
+		const manager = new SessionManager({
+			envFactory: () => made.env,
+			observerFactory: () => new PtyObserver({ clock: () => 0 }),
+			idGen: () => opts.idGen ?? "g1",
+			...(opts.allowedEnvs ? { allowedEnvs: opts.allowedEnvs } : {}),
+			...(opts.defaultEnv ? { defaultEnv: opts.defaultEnv } : {}),
+		});
+		return { manager, made };
+	}
+
+	test("with allowedEnvs=[docker], an explicit env:'local' is rejected and nothing materializes", async () => {
+		const { manager, made } = guarded({ allowedEnvs: ["docker"] });
+		await expect(manager.open({ env: "local" })).rejects.toBeInstanceOf(EnvNotAllowedError);
+		expect(made.ensured).toHaveLength(0);
+		expect(manager.list()).toHaveLength(0);
+	});
+
+	test("the rejection carries env, allowed list, and code", async () => {
+		const { manager } = guarded({ allowedEnvs: ["docker"] });
+		let caught: unknown;
+		try {
+			await manager.open({ env: "local" });
+		} catch (e) {
+			caught = e;
+		}
+		expect(caught).toBeInstanceOf(EnvNotAllowedError);
+		expect((caught as EnvNotAllowedError).env).toBe("local");
+		expect((caught as EnvNotAllowedError).allowed).toEqual(["docker"]);
+		expect((caught as EnvNotAllowedError).code).toBe("env_not_allowed");
+	});
+
+	test("with allowedEnvs=[docker], an OMITTED env is coerced to docker (not rejected)", async () => {
+		const { manager } = guarded({ allowedEnvs: ["docker"], idGen: "g3" });
+		const s = await manager.open();
+		expect(manager.get(s.id)).toBeDefined();
+		expect(manager.list()[0]?.env).toBe("docker");
+	});
+
+	test("with allowedEnvs=[docker], env:'docker' succeeds", async () => {
+		const { manager } = guarded({ allowedEnvs: ["docker"], idGen: "g4" });
+		const s = await manager.open({ env: "docker" });
+		expect(s.id).toBe("g4");
+		expect(manager.list()[0]?.env).toBe("docker");
+	});
+
+	test("no policy (default): env:'local' still works (back-compat)", async () => {
+		const { manager } = guarded({ idGen: "g5" });
+		const s = await manager.open({ env: "local" });
+		expect(s.id).toBe("g5");
+		expect(manager.list()[0]?.env).toBe("local");
+	});
+
+	test("explicit defaultEnv is honoured when env omitted", async () => {
+		const { manager } = guarded({ defaultEnv: "docker", idGen: "g6" });
+		await manager.open();
+		expect(manager.list()[0]?.env).toBe("docker");
+	});
+
+	test("TERMBRIDGE_ALLOWED_ENVS=docker locks the env via the environment variable", async () => {
+		const prev = process.env.TERMBRIDGE_ALLOWED_ENVS;
+		process.env.TERMBRIDGE_ALLOWED_ENVS = "docker";
+		try {
+			const made = makeEnv();
+			const manager = new SessionManager({
+				envFactory: () => made.env,
+				observerFactory: () => new PtyObserver({ clock: () => 0 }),
+				idGen: () => "g7",
+			});
+			await expect(manager.open({ env: "local" })).rejects.toBeInstanceOf(EnvNotAllowedError);
+			const s = await manager.open();
+			expect(manager.get(s.id)).toBeDefined();
+			expect(manager.list()[0]?.env).toBe("docker");
+		} finally {
+			if (prev === undefined) {
+				delete process.env.TERMBRIDGE_ALLOWED_ENVS;
+			} else {
+				process.env.TERMBRIDGE_ALLOWED_ENVS = prev;
+			}
+		}
+	});
+
+	test("an empty allowedEnvs array is treated as no policy (no deny-all footgun)", async () => {
+		const { manager } = guarded({ allowedEnvs: [], idGen: "g8" });
+		const s = await manager.open({ env: "local" });
+		expect(s.id).toBe("g8");
+		expect(manager.list()[0]?.env).toBe("local");
+	});
+
+	test("recover() honours the policy — adopts under defaultEnv, never hardcoded local", async () => {
+		const made = makeEnv();
+		const kinds: EnvKind[] = [];
+		const manager = new SessionManager({
+			envFactory: (k: EnvKind) => {
+				kinds.push(k);
+				return made.env;
+			},
+			observerFactory: () => new PtyObserver({ clock: () => 0 }),
+			idGen: () => "rc1",
+			allowedEnvs: ["docker"],
+		});
+		await manager.recover();
+		expect(kinds).not.toContain("local");
+		expect(kinds.every((k) => k === "docker")).toBe(true);
+	});
+
+	test("malformed TERMBRIDGE_ALLOWED_ENVS throws (no silent degrade to no-policy)", () => {
+		const prev = process.env.TERMBRIDGE_ALLOWED_ENVS;
+		process.env.TERMBRIDGE_ALLOWED_ENVS = "docker;local"; // wrong delimiter
+		try {
+			expect(
+				() =>
+					new SessionManager({
+						envFactory: () => makeEnv().env,
+						observerFactory: () => new PtyObserver({ clock: () => 0 }),
+					}),
+			).toThrow(/invalid/i);
+		} finally {
+			if (prev === undefined) {
+				delete process.env.TERMBRIDGE_ALLOWED_ENVS;
+			} else {
+				process.env.TERMBRIDGE_ALLOWED_ENVS = prev;
+			}
+		}
+	});
+
+	test("empty TERMBRIDGE_ALLOWED_ENVS is treated as unset (no policy, local allowed)", async () => {
+		const prev = process.env.TERMBRIDGE_ALLOWED_ENVS;
+		process.env.TERMBRIDGE_ALLOWED_ENVS = "  ,  ";
+		try {
+			const made = makeEnv();
+			const manager = new SessionManager({
+				envFactory: () => made.env,
+				observerFactory: () => new PtyObserver({ clock: () => 0 }),
+				idGen: () => "e1",
+			});
+			const s = await manager.open({ env: "local" });
+			expect(s.id).toBe("e1");
+			expect(manager.list()[0]?.env).toBe("local");
+		} finally {
+			if (prev === undefined) {
+				delete process.env.TERMBRIDGE_ALLOWED_ENVS;
+			} else {
+				process.env.TERMBRIDGE_ALLOWED_ENVS = prev;
+			}
+		}
 	});
 });

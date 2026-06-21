@@ -62,7 +62,10 @@ export function createToolSpecs(manager: SessionManager): ToolSpec[] {
 					cols: args.cols,
 					rows: args.rows,
 				});
-				return { id: s.id, name: s.name, env: args.env ?? "local" };
+				// Report the ACTUAL backend the manager selected — an env policy may
+				// coerce an omitted env (e.g. to docker), so don't echo the request.
+				const info = manager.list().find((i) => i.id === s.id);
+				return { id: s.id, name: s.name, env: info?.env ?? args.env ?? "local" };
 			},
 		},
 		{

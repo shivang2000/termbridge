@@ -44,6 +44,57 @@ export class ConcurrencyLimitError extends Error {
 	}
 }
 
+/**
+ * Thrown by `open()` when the explicitly-requested environment is outside the
+ * configured allowlist (see {@link SessionManagerOptions.allowedEnvs}). Lets a
+ * caller lock an untrusted control plane — e.g. a chat-gateway agent — to
+ * container isolation so a session can never execute on the host.
+ */
+export class EnvNotAllowedError extends Error {
+	readonly code = "env_not_allowed" as const;
+	constructor(
+		public readonly env: EnvKind,
+		public readonly allowed: readonly EnvKind[],
+	) {
+		super(`environment "${env}" is not permitted (allowed: ${allowed.join(", ")})`);
+		this.name = "EnvNotAllowedError";
+	}
+}
+
+/** Every environment kind, used to validate TERMBRIDGE_ALLOWED_ENVS tokens. */
+const ALL_ENV_KINDS: readonly EnvKind[] = ["local", "docker", "sandbox"];
+
+/**
+ * Parse a comma-separated TERMBRIDGE_ALLOWED_ENVS value into a validated env
+ * allowlist. Unknown tokens are dropped; an empty/all-invalid result yields
+ * `undefined` (no policy) rather than an empty allowlist that would deny every
+ * open — an empty allowlist is treated as "not configured", not "deny all".
+ */
+function parseAllowedEnvs(raw: string | undefined): EnvKind[] | undefined {
+	if (raw === undefined) {
+		return undefined;
+	}
+	const tokens = raw
+		.split(",")
+		.map((s) => s.trim().toLowerCase())
+		.filter((s) => s.length > 0);
+	// Truly empty (unset / whitespace / commas only) → no policy.
+	if (tokens.length === 0) {
+		return undefined;
+	}
+	// FAIL LOUD on typos / wrong delimiters (e.g. "docker;local", "container").
+	// Silently dropping unknown tokens would degrade a misconfigured lockdown to
+	// "no policy" while the operator believes the env is locked — a security trap.
+	const invalid = tokens.filter((s) => !(ALL_ENV_KINDS as readonly string[]).includes(s));
+	if (invalid.length > 0) {
+		throw new Error(
+			`TERMBRIDGE_ALLOWED_ENVS contains invalid values: ${invalid.join(", ")}. ` +
+				`Valid (comma-separated): ${ALL_ENV_KINDS.join(", ")}`,
+		);
+	}
+	return tokens as EnvKind[];
+}
+
 /** Context handed to the env factory so per-session backends can wire themselves. */
 export interface EnvFactoryContext {
 	/** Host directory holding this session's `pipe-pane` temp file (Docker bind-mounts it). */
@@ -74,6 +125,21 @@ export interface SessionManagerOptions {
 	 * inherit the ambient HOME and no auth provisioning is applied.
 	 */
 	homeDir?: string;
+	/**
+	 * Allowlist of environments `open()` will permit. When set (non-empty), an
+	 * explicitly-requested env outside the list is rejected with
+	 * {@link EnvNotAllowedError}, and an OMITTED env is coerced to {@link defaultEnv}
+	 * (which is pinned to an allowed value). Defaults to TERMBRIDGE_ALLOWED_ENVS
+	 * (comma-separated) or undefined (all envs allowed). Set to `["docker"]` to lock
+	 * an untrusted caller to container isolation — a session can then never run on
+	 * the host, even if the caller asks for `env:"local"`.
+	 */
+	allowedEnvs?: EnvKind[];
+	/**
+	 * Environment used when a caller omits `env`. Defaults to "local"; if that is
+	 * not in {@link allowedEnvs}, the first allowed env is used instead.
+	 */
+	defaultEnv?: EnvKind;
 }
 
 interface Entry {
@@ -149,6 +215,10 @@ export class SessionManager {
 	private readonly idGen: () => string;
 	private readonly pipeDir: string;
 	private readonly auth: AuthProvisioner | undefined;
+	/** Permitted environments; undefined = no policy (all allowed). */
+	private readonly allowedEnvs: readonly EnvKind[] | undefined;
+	/** Environment used when `open()` is called without an explicit `env`. */
+	private readonly defaultEnv: EnvKind;
 
 	private readonly sessions = new Map<string, Entry>();
 	/**
@@ -189,6 +259,23 @@ export class SessionManager {
 		const homeDir = opts.homeDir ?? process.env.TERMBRIDGE_HOME;
 		this.auth = homeDir ? new AuthProvisioner({ homeDir }) : undefined;
 		this.auth?.ensureReady();
+
+		// Env policy: an explicit option wins; otherwise read TERMBRIDGE_ALLOWED_ENVS.
+		// An empty option array is treated as "not configured" (no deny-all footgun).
+		const optAllowed =
+			opts.allowedEnvs && opts.allowedEnvs.length > 0 ? opts.allowedEnvs : undefined;
+		const allowedEnvs = optAllowed ?? parseAllowedEnvs(process.env.TERMBRIDGE_ALLOWED_ENVS);
+		this.allowedEnvs = allowedEnvs;
+		// Pin the omitted-env default to an allowed value so callers that don't pass
+		// `env` succeed under a policy instead of always tripping the guard.
+		let defaultEnv: EnvKind = opts.defaultEnv ?? "local";
+		if (allowedEnvs && !allowedEnvs.includes(defaultEnv)) {
+			const first = allowedEnvs[0];
+			if (first) {
+				defaultEnv = first;
+			}
+		}
+		this.defaultEnv = defaultEnv;
 	}
 
 	/**
@@ -197,6 +284,17 @@ export class SessionManager {
 	 * environment is supported in M1; an unknown kind is rejected by the factory.
 	 */
 	async open(opts: OpenSessionOptions = {}): Promise<Session> {
+		// Resolve + validate the execution backend FIRST. Under an env policy
+		// (allowedEnvs / TERMBRIDGE_ALLOWED_ENVS) an explicitly-requested env outside
+		// the allowlist is rejected with a typed error BEFORE any slot is reserved or
+		// container spawned; an omitted env is coerced to the (allowed) default. This
+		// is what lets an untrusted caller be pinned to docker-only so a session can
+		// never execute on the host.
+		const kind: EnvKind = opts.env ?? this.defaultEnv;
+		if (this.allowedEnvs && !this.allowedEnvs.includes(kind)) {
+			throw new EnvNotAllowedError(kind, this.allowedEnvs);
+		}
+
 		// Reserve a slot SYNCHRONOUSLY (before the first await) so concurrent
 		// open() calls cannot all clear the cap and then exceed it. `reserved`
 		// counts in-flight opens; on success we register the Session, and we
@@ -207,7 +305,6 @@ export class SessionManager {
 		this.reserved++;
 
 		try {
-			const kind: EnvKind = opts.env ?? "local";
 			// pipeFile lives under pipeDir; Docker bind-mounts pipeDir so the host
 			// observer can tail the in-container pipe-pane output.
 			const env = this.envFactory(kind, { pipeDir: this.pipeDir });
@@ -303,7 +400,14 @@ export class SessionManager {
 	 * nothing already tracked. Returns only the newly-adopted SessionInfos.
 	 */
 	async recover(): Promise<SessionInfo[]> {
-		const kind: EnvKind = "local";
+		// Adopt under the policy-compliant default — NOT a hardcoded "local". Under a
+		// docker-only policy this prevents recover() from silently re-adopting host
+		// tmux sessions (which would bypass the open() guard). With no policy the
+		// default stays "local", so behaviour is unchanged.
+		const kind: EnvKind = this.defaultEnv;
+		if (this.allowedEnvs && !this.allowedEnvs.includes(kind)) {
+			return [];
+		}
 		const env = this.envFactory(kind, { pipeDir: this.pipeDir });
 		const names = await env.listSessions();
 
