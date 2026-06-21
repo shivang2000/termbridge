@@ -1,6 +1,6 @@
 {
 	"name": "@termbridge/mcp-server",
-	"version": "1.0.1",
+	"version": "1.0.2",
 	"type": "module",
 	"license": "MIT",
 	"bin": {
@@ -34,7 +34,7 @@
 	},
 	"dependencies": {
 		"@modelcontextprotocol/sdk": "^1.29.0",
-		"@termbridge/core": "^1.0.1",
+		"@termbridge/core": "^1.0.2",
 		"zod": "^3.24.2"
 	}
 }

@@ -202,7 +202,7 @@ Build/publish the image yourself with `scripts/publish-image.sh <namespace> 1.0.
 ### A) Give Claude Code (or any MCP client) the tools — stdio
 
 ```bash
-claude mcp add termbridge -- bun /ABS/PATH/termbridge/packages/mcp-server/src/stdio.ts
+claude mcp add termbridge -- npx -y @termbridge/mcp-server
 ```
 
 Pass config through the server's environment:
@@ -211,7 +211,7 @@ Pass config through the server's environment:
 claude mcp add termbridge \
   -e TERMBRIDGE_HOME=$HOME/.termbridge/home \
   -e TERMBRIDGE_ALLOWED_ENVS=docker \
-  -- bun /ABS/PATH/termbridge/packages/mcp-server/src/stdio.ts
+  -- npx -y @termbridge/mcp-server
 ```
 
 The agent then calls `open_session`, `send_text`, `wait_for_idle`, `read_screen`, … (full list below).

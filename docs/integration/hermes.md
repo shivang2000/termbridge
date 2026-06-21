@@ -17,14 +17,14 @@ Claude. This works with any MCP-capable agent — Hermes is the worked example.
 
 ## Install (one-time)
 
-**Prereqs on the host:** `bun` ≥ 1.3, `docker`, `tmux`, a Claude subscription. (The MCP server runs on
-bun; sessions run `claude` in per-session Docker containers.)
+**Prereqs on the host:** `node` ≥ 20 (for `npx`) or `bun`, `docker`, a Claude subscription. No clone
+needed — the MCP server comes from npm and the session sandbox from Docker Hub.
 
-### 1. Get termbridge + the per-session image
+### 1. Get the per-session sandbox image (no clone needed)
+Each session runs `claude` inside this image; tag it as the default `termbridge:dev`:
 ```bash
-git clone https://github.com/shivang2000/termbridge.git
-cd termbridge && bun install
-docker build -t termbridge:dev -f docker/Dockerfile .   # the sandbox each session runs claude in
+docker pull shivang2000/termbridge-sandbox:1.0.2
+docker tag  shivang2000/termbridge-sandbox:1.0.2 termbridge:dev
 ```
 
 ### 2. Log in to Claude once (creds persist + are shared by every session)
@@ -39,19 +39,16 @@ docker run --rm -it -v ~/.termbridge/home:/creds -e HOME=/creds termbridge:dev c
 hermes mcp add termbridge \
   --env TERMBRIDGE_HOME="$HOME/.termbridge/home" TERMBRIDGE_TMUX_SOCKET=termbridge \
         TERMBRIDGE_ALLOWED_ENVS=docker TERMBRIDGE_MAX_SESSIONS=3 \
-  --command bun \
-  --args /ABS/PATH/termbridge/packages/mcp-server/src/stdio.ts
+  --command npx \
+  --args -y @termbridge/mcp-server
 ```
 `TERMBRIDGE_ALLOWED_ENVS=docker` means a chat-triggered session can **never** run on the host — only in a
 container. (Equivalent manual edit: add the same block under `mcp_servers:` in `~/.hermes/config.yaml`.)
 
-### 4. Install the engineer-loop skill
+### 4. Install the engineer-loop skill (from the public repo)
 ```bash
-# from your clone (step 1):
-mkdir -p ~/.hermes/skills/engineer-loop
-cp skills/engineer-loop/SKILL.md ~/.hermes/skills/engineer-loop/SKILL.md
-# once the repo is public you can instead install by URL:
-#   hermes skills install https://raw.githubusercontent.com/shivang2000/termbridge/main/skills/engineer-loop/SKILL.md --yes
+hermes skills install \
+  https://raw.githubusercontent.com/shivang2000/termbridge/main/skills/engineer-loop/SKILL.md --yes
 ```
 
 ### 5. (Optional) give Hermes a Jira/tracker tool
@@ -90,8 +87,9 @@ the live browser view (the unified server) and **type to take over** at any poin
   `human_took_over`.
 - **The same loop without a clone / without chat:** `@termbridge/orchestrator`'s `runEngineerLoop`, or the
   CLI `scripts/engineer.ts` against a running server — see the README "Walkthrough".
-- **After npm publish** the MCP server install becomes `--command npx --args -y @termbridge/mcp-server`
-  (no clone needed); not published yet.
+- **Published on npm:** `@termbridge/core`, `@termbridge/mcp-server`, `@termbridge/orchestrator` (≥ 1.0.2).
+  The MCP server runs via `npx -y @termbridge/mcp-server` (no clone). To build your own loop, depend on
+  `@termbridge/orchestrator`.
 - **Safety/limits:** keep `TERMBRIDGE_ALLOWED_ENVS=docker` and a low `TERMBRIDGE_MAX_SESSIONS`.
   Auto-approval presses through every prompt inside the container — the container is the isolation. Fleet
   use of a subscription may hit plan limits / terms; cap concurrency.

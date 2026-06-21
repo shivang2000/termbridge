@@ -8,7 +8,7 @@ Claude Code is itself an MCP client, so it can pilot *another* `claude` session 
 claude mcp add termbridge \
   --env TERMBRIDGE_HOME=$HOME/.termbridge/home \
   --env TERMBRIDGE_TMUX_SOCKET=termbridge \
-  -- bun /ABS/PATH/termbridge/packages/mcp-server/src/stdio.ts
+  -- npx -y @termbridge/mcp-server
 # after npm publish:  -- npx -y @termbridge/mcp-server
 ```
 
