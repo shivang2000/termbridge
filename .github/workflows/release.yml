@@ -1,0 +1,53 @@
+name: Release
+
+# Push a version tag to publish: bump package versions, commit, then
+#   git tag v1.2.3 && git push origin v1.2.3
+# Publishes @termbridge/* to npm and the images to Docker Hub (idempotent —
+# npm versions already published are skipped; image tags are overwritten).
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  npm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install bun
+        run: |
+          curl -fsSL https://bun.sh/install | bash -s "bun-v1.3.5"
+          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck && bun run lint && bun run test
+      - name: Configure npm auth
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+      - name: Publish to npm (builds dist, swaps manifest, skips existing versions)
+        run: bun scripts/publish-npm.ts
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve version from tag
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+      - name: Docker Hub login
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+      - name: Build + push server image
+        env:
+          NS: ${{ secrets.DOCKERHUB_USERNAME }}
+        run: |
+          docker build -f docker/Dockerfile.server -t "$NS/termbridge:$VERSION" -t "$NS/termbridge:latest" .
+          docker push "$NS/termbridge:$VERSION"
+          docker push "$NS/termbridge:latest"
+      - name: Build + push per-session sandbox image
+        env:
+          NS: ${{ secrets.DOCKERHUB_USERNAME }}
+        run: |
+          docker build -f docker/Dockerfile -t "$NS/termbridge-sandbox:$VERSION" -t "$NS/termbridge-sandbox:latest" .
+          docker push "$NS/termbridge-sandbox:$VERSION"
+          docker push "$NS/termbridge-sandbox:latest"

@@ -41,6 +41,21 @@ for (const p of PKGS) {
 	for (const k of ["main", "types", "exports", "bin"] as const) {
 		if (pc[k] !== undefined) j[k] = pc[k];
 	}
+	// Idempotent: skip a version that is already on the registry (safe CI re-runs).
+	let already = false;
+	try {
+		const out = execFileSync("npm", ["view", `@termbridge/${p}@${j.version}`, "version"], {
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "ignore"],
+		});
+		already = out.trim() === j.version;
+	} catch {
+		already = false; // 404 = not published yet
+	}
+	if (already) {
+		console.log(`[npm] @termbridge/${p}@${j.version} already published — skipping`);
+		continue;
+	}
 	delete j.publishConfig;
 	delete j.private;
 	writeFileSync(path, `${JSON.stringify(j, null, "\t")}\n`);

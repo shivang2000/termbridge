@@ -31,7 +31,16 @@ Run on the host; most need the `termbridge:dev` image and creds at `~/.termbridg
 
 ## Release runbook
 
-`private: true` is the publish gate on every package — releasing is a deliberate, operator-run step.
+**Automated (preferred):** bump package versions (+ the internal `@termbridge/core` dep), commit, then
+`git tag vX.Y.Z && git push origin vX.Y.Z`. `.github/workflows/release.yml` runs the gate, publishes the
+npm packages (idempotent — existing versions skipped), and builds + pushes both Docker images
+(`<ns>/termbridge` and `<ns>/termbridge-sandbox`, `:X.Y.Z` + `:latest`).
+
+Required repo secrets (Settings → Secrets → Actions, or `gh secret set <NAME>`):
+`NPM_TOKEN` (npm **Classic Automation** token — bypasses 2FA), `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`
+(a Docker Hub access token with write).
+
+**Manual** (same effect, run locally — for reference):
 
 **npm (libraries: core → mcp-server → orchestrator):**
 ```bash
