@@ -47,10 +47,11 @@ container. (Equivalent manual edit: add the same block under `mcp_servers:` in `
 
 ### 4. Install the engineer-loop skill
 ```bash
-hermes skills install \
-  https://raw.githubusercontent.com/shivang2000/termbridge/main/skills/engineer-loop/SKILL.md --yes
-# or, from your clone:  mkdir -p ~/.hermes/skills/engineer-loop && \
-#   cp skills/engineer-loop/SKILL.md ~/.hermes/skills/engineer-loop/SKILL.md
+# from your clone (step 1):
+mkdir -p ~/.hermes/skills/engineer-loop
+cp skills/engineer-loop/SKILL.md ~/.hermes/skills/engineer-loop/SKILL.md
+# once the repo is public you can instead install by URL:
+#   hermes skills install https://raw.githubusercontent.com/shivang2000/termbridge/main/skills/engineer-loop/SKILL.md --yes
 ```
 
 ### 5. (Optional) give Hermes a Jira/tracker tool
