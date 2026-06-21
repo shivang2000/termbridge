@@ -38,5 +38,5 @@ tmp/
 .dogfood-*
 
 # local debug artifacts (web-UI screenshots, playwright snapshots)
-termbridge-watch*.png
+termbridge-*.png
 .playwright-mcp/

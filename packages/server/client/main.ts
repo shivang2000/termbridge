@@ -14,6 +14,7 @@ interface RecognizedEvent {
 const sessionId = new URLSearchParams(window.location.search).get("session") ?? "";
 const termEl = document.getElementById("term");
 const eventsEl = document.getElementById("events");
+const activityEl = document.getElementById("activity");
 
 const term = new Terminal({ convertEol: false, fontSize: 13, cursorBlink: true, scrollback: 5000 });
 const fit = new FitAddon();
@@ -61,7 +62,18 @@ ws.addEventListener("message", (e) => {
 	} else if (m.type === "stdout") {
 		term.write(String(m.data ?? ""));
 	} else if (m.type === "event") {
-		renderEvents(m.events ?? []);
+		// Route live claude-activity to the status bar; actionable prompts to cards
+		// (so a progress tick never clobbers a pending permission/login card).
+		const evs = m.events ?? [];
+		const activity = evs.filter((ev) => ev.kind === "claude-activity");
+		const prompts = evs.filter((ev) => ev.kind !== "claude-activity");
+		const latest = activity[activity.length - 1];
+		if (latest) {
+			renderActivity(latest);
+		}
+		if (prompts.length > 0) {
+			renderEvents(prompts);
+		}
 	} else if (m.type === "error") {
 		term.write(`\r\n[termbridge] ${String(m.message ?? "")}\r\n`);
 	}
@@ -80,6 +92,32 @@ function sendResize(): void {
 // pane redraws at the viewport width (avoids ragged wrapping from the open size).
 ws.addEventListener("open", () => setTimeout(sendResize, 50));
 window.addEventListener("resize", sendResize);
+
+const PHASE_META: Record<string, { icon: string; cls: string; label: string }> = {
+	tool: { icon: "🔧", cls: "live", label: "running tool" },
+	editing: { icon: "✏️", cls: "live", label: "editing" },
+	thinking: { icon: "…", cls: "live", label: "thinking" },
+	awaiting_input: { icon: "⏳", cls: "wait", label: "awaiting input" },
+	idle: { icon: "✓", cls: "", label: "idle" },
+};
+
+/** Render the latest claude-activity phase into the live status bar. */
+function renderActivity(ev: RecognizedEvent): void {
+	if (!activityEl) {
+		return;
+	}
+	const phase = typeof ev.data.phase === "string" ? ev.data.phase : "working";
+	const tool = typeof ev.data.tool === "string" ? ev.data.tool : "";
+	const file = typeof ev.data.file === "string" ? ev.data.file : "";
+	const meta = PHASE_META[phase] ?? { icon: "·", cls: "", label: phase };
+	const what = tool ? ` ${tool}${file ? `(${file})` : ""}` : "";
+	const span = document.createElement("span");
+	if (meta.cls) {
+		span.className = meta.cls;
+	}
+	span.textContent = `${meta.icon} ${meta.label}${what}`;
+	activityEl.replaceChildren(span);
+}
 
 function renderEvents(events: RecognizedEvent[]): void {
 	if (!eventsEl) {
