@@ -1,0 +1,42 @@
+# Self-contained termbridge SERVER image — run it directly, no clone/build needed:
+#
+#   docker run --rm -p 127.0.0.1:8787:8787 \
+#     -v ~/.termbridge/home:/home/tb/.termbridge/home \
+#     -e TERMBRIDGE_TOKEN=choose-a-secret <ns>/termbridge
+#   # → web UI + HTTP tool API on http://127.0.0.1:8787 (token-gated)
+#
+# One-time claude login (subscription auth) into the mounted creds volume:
+#   docker run --rm -it -v ~/.termbridge/home:/home/tb/.termbridge/home \
+#     -e HOME=/home/tb/.termbridge/home <ns>/termbridge claude
+#
+# Sessions run inside THIS container via env:"local" (the container is the
+# isolation). It does NOT spawn sibling docker containers (no docker-in-docker).
+FROM oven/bun:1.3.5
+
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends \
+		tmux nodejs npm git ca-certificates procps \
+	&& rm -rf /var/lib/apt/lists/*
+
+# Claude Code CLI — sessions pilot this TUI (subscription, not API). Creds are NOT
+# baked in; they arrive via the mounted HOME volume.
+RUN npm install -g @anthropic-ai/claude-code
+
+WORKDIR /app
+
+# Manifests first for layer caching, then sources, then install + build the client.
+COPY package.json bun.lock turbo.json biome.json tsconfig.base.json ./
+COPY packages ./packages
+RUN bun install --frozen-lockfile \
+	&& (cd packages/server/client && bunx vite build)
+
+# Bind on all interfaces inside the container (publish with -p; still token-gated).
+ENV HOST=0.0.0.0 \
+	PORT=8787 \
+	TERMBRIDGE_HOME=/home/tb/.termbridge/home \
+	TERMBRIDGE_PIPE_DIR=/tmp/termbridge-pipes \
+	TERMBRIDGE_TMUX_SOCKET=termbridge \
+	TERMBRIDGE_MAX_SESSIONS=4
+
+EXPOSE 8787
+CMD ["bun", "packages/server/src/index.ts"]

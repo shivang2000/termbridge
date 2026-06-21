@@ -120,6 +120,24 @@ docker run -it --rm -v ~/.termbridge/home:/creds -e HOME=/creds termbridge:dev c
 
 ## Usage
 
+### Quickest — run the server image (no clone, no build)
+
+A self-contained image runs the unified server (web UI + HTTP tool API); sessions run `claude` inside the
+container (`env:"local"`), so there's nothing to build:
+
+```bash
+# one-time subscription login into a creds volume:
+docker run --rm -it -v ~/.termbridge/home:/home/tb/.termbridge/home \
+  -e HOME=/home/tb/.termbridge/home <namespace>/termbridge claude
+# then run the server (token-gated; bound to your loopback):
+docker run --rm -p 127.0.0.1:8787:8787 \
+  -v ~/.termbridge/home:/home/tb/.termbridge/home \
+  -e TERMBRIDGE_TOKEN=choose-a-secret <namespace>/termbridge
+# → http://127.0.0.1:8787/?session=<id>&token=choose-a-secret  +  POST /api/tool/<name>
+```
+
+Build/publish it yourself with `scripts/publish-image.sh <namespace> 1.0.0` (see `docker/Dockerfile.server`).
+
 ### A) Give Claude Code (or any MCP client) the tools — stdio
 
 ```bash
