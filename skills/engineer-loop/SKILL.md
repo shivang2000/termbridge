@@ -1,6 +1,6 @@
 ---
 name: engineer-loop
-description: Delegate a coding task to a Claude Code agent via the termbridge MCP tools and run an iterate-until-done engineering loop — stream ~25s progress updates back to the user (Discord), self-verify with the repo's tests, and report the result. Use when the user asks to build, fix, implement, or change software through termbridge / Claude Code.
+description: Take a coding task — often a Jira/tracker ticket reference (e.g. PROJ-123) dropped in chat — and run it to done by piloting a Claude Code agent through the termbridge MCP tools: open a session with a sharp engineering prompt, auto-approve routine reads/edits, self-verify with the repo's tests, and stream ~25s progress + the final review back to the user's channel. Use when the user asks to build, fix, implement, or ship a ticket/change through termbridge / Claude Code.
 ---
 
 # Engineer Loop (termbridge → Claude Code)
@@ -12,7 +12,10 @@ wait_for_text, close_session). YOU are the loop.
 
 ## Inputs to gather first
 
-1. **Goal** — what to build/fix (from the user's message).
+0. **Ticket reference?** If the message names a tracker ticket (e.g. `PROJ-123`, a Jira/Linear URL) and you
+   have a tracker tool/MCP, **fetch it** and use its title + description as the goal and its acceptance
+   criteria as the acceptance list. No tracker tool? Ask the user to paste the ticket text.
+1. **Goal** — what to build/fix (from the ticket or the user's message).
 2. **Repo / working dir** — the absolute path to operate in.
 3. **Acceptance criteria / verification** — how we know it's done.
    - **If the user did NOT give any verification or acceptance steps, ASK:** *"Do you have any

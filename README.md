@@ -21,6 +21,40 @@ many sessions in parallel, each piloting its own `claude`, sharing one subscript
 > detection-evasion (humanized keystroke timing, account rotation, fingerprint spoofing). Cap concurrency,
 > understand your plan's terms, and use this at your own risk. See [Responsible use](#responsible-use).
 
+## The headline flow — chat a ticket, watch it ship
+
+Drop a Jira ticket in your team channel. An agent picks it up, opens **Claude Code** with a real
+engineering prompt, does the work on your **subscription**, auto-approves the routine edits, and streams
+progress + the final review back to the **same channel**. You never leave chat.
+
+```
+  You ─ "@bot ship PROJ-123" ─▶  Hermes (or any agent)
+                                   │  ① fetches the Jira ticket (the agent's Jira tool)
+                                   │  ② opens Claude Code via termbridge + a sharp engineering prompt
+                                   ▼
+                            termbridge ── drives ──▶  claude (subscription) edits your repo
+                                   │  ③ auto-approves reads/edits · runs your tests · iterates
+                                   ▼
+  You ◀── ~25s progress + final review ──  Hermes        (in your channel)
+```
+
+1. **Chat the ticket.** Mention the bot with a Jira reference: *"@bot ship PROJ-123."*
+2. **Agent opens Claude Code with a badass prompt.** It fetches the ticket, then (via the termbridge
+   **`engineer-loop`** skill) opens a `claude` session bound to your repo and hands it the goal +
+   acceptance criteria.
+3. **It works, auto-approving the routine stuff.** The loop presses through claude's edit/command prompts
+   for you (reads + basic edits), runs your tests each round, and keeps going until the criteria pass.
+4. **You review in-channel.** A short digest lands every ~25s, then a final summary + the diff — all in the
+   same chat. Approve, ask for changes, or take over live in the browser anytime.
+
+**Cheap + safe:** claude runs on your **subscription** (not metered API), and each chat-triggered session
+is pinned to a **docker** container (the docker-only guard) so it can never touch the host.
+
+**Shipped vs. wired:** the loop, auto-approval, ~25s digests, and the Hermes `engineer-loop` skill are
+built (walkthrough below). *Fetching* the ticket from Jira is the agent's job — give Hermes a Jira
+tool/MCP; termbridge pilots Claude, it doesn't pull from Jira. Run it today with no Jira tool by pasting
+the ticket text into `scripts/engineer.ts`.
+
 ## How it works
 
 ```
