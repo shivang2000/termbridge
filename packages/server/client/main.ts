@@ -32,7 +32,10 @@ const tryFit = () => {
 tryFit();
 
 const proto = window.location.protocol === "https:" ? "wss" : "ws";
-const ws = new WebSocket(`${proto}://${window.location.host}/ws/${sessionId}`);
+// Forward the bearer token to the WS upgrade (the server token-gates /ws).
+const token = new URLSearchParams(window.location.search).get("token") ?? "";
+const tokenQs = token ? `?token=${encodeURIComponent(token)}` : "";
+const ws = new WebSocket(`${proto}://${window.location.host}/ws/${sessionId}${tokenQs}`);
 
 function send(data: string): void {
 	if (ws.readyState === WebSocket.OPEN) {
