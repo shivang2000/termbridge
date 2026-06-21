@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.0.3 — 2026-06-21
+
+CI/CD: tag-triggered release pipeline (`.github/workflows/release.yml`) publishes the npm packages +
+both Docker images on every `vX.Y.Z` tag. First release cut through the pipeline. No code changes.
+
+## v1.0.2 — 2026-06-21
+
+Fixed the published npm manifest (1.0.1 shipped `exports` pointing at unshipped `src`; npm ignores
+`publishConfig`). Publish now swaps top-level fields to `dist` for the tarball (`scripts/publish-npm.ts`)
+and keeps `src` for dev. Added the per-session sandbox image `…/termbridge-sandbox`. 1.0.1 deprecated.
+
 ## v1.0.1 — 2026-06-21
 
 Usability: log in to Claude **through** termbridge, and hand off a ticket in one command.
