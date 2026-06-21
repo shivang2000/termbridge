@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install bun
+        run: |
+          curl -fsSL https://bun.sh/install | bash -s "bun-v1.3.5"
+          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+      - run: bun install --frozen-lockfile
+      # Unit suite is fully mocked (no tmux/docker/network) — safe in CI.
+      # Real-tmux/Docker/claude smokes in scripts/ stay manual/operator-run.
+      - run: bun run typecheck
+      - run: bun run lint
+      - run: bun run test

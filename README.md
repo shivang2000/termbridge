@@ -61,7 +61,7 @@ many sessions in parallel, each piloting its own `claude`, sharing one subscript
 | `packages/orchestrator` | Reusable iterate-until-done **engineering loop** (`runEngineerLoop`) over the tool surface — agent-agnostic, consumer-side (D8: not in core) |
 | `packages/claude-code-plugin` | Turnkey Claude Code plugin that registers the termbridge MCP server |
 
-## Status — v0.1.1
+## Status — v1.0.0
 
 Milestones **M1–M6 complete**, plus the **final acceptance**: an agent piloted a real logged-in `claude`
 TUI through the tool surface to edit a file in a bound git repo while a human watched live — on

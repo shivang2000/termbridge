@@ -1,0 +1,61 @@
+# Contributing to termbridge
+
+## Dev setup
+
+```bash
+bun install
+bun run test        # turbo: unit tests (all mocked — no tmux/docker/network)
+bun run typecheck   # tsc --noEmit across packages
+bun run lint        # biome
+bun run check       # biome --write (autofix)
+```
+
+CI (`.github/workflows/ci.yml`) runs typecheck + lint + test on every push/PR.
+
+## Smokes (manual — need real tmux / Docker / a claude login)
+
+Run on the host; most need the `termbridge:dev` image and creds at `~/.termbridge/home` (see README).
+
+| Script | Proves |
+|---|---|
+| `bun scripts/smoke-env-guard.ts` | docker-only guard rejects `env:local` over real stdio (no docker/creds needed) |
+| `bun scripts/smoke-concurrency.ts` | race-safe concurrency cap + per-session isolation (real docker) |
+| `bun scripts/smoke-engineer-loop.ts` | the engineering loop drives real claude to fix a failing test |
+| `bun scripts/accept-final.ts` | full acceptance: agent edits a bound repo via real claude, human co-present |
+
+## Conventions
+- TypeScript (NodeNext, strict, `noUncheckedIndexedAccess`). Biome for format + lint (tabs).
+- Tests live next to source as `*.test.ts` and are excluded from published `dist`.
+- Real tmux/claude work runs in **Docker** on the dedicated `-L termbridge` socket — never the host's
+  default tmux socket. Keep the unit suite fully mocked.
+
+## Release runbook
+
+`private: true` is the publish gate on every package — releasing is a deliberate, operator-run step.
+
+**npm (libraries: core → mcp-server → orchestrator):**
+```bash
+# 1) bump versions (already 1.0.0), then for each publishable package:
+#    remove "private": true, ensure publishConfig is set.
+# 2) build (emits dist without test files):
+bun run build
+# 3) publish core FIRST (others depend on it), then mcp-server, then orchestrator:
+cd packages/core && bun publish --access public && cd -
+cd packages/mcp-server && bun publish --access public && cd -
+cd packages/orchestrator && bun publish --access public && cd -
+```
+(`@termbridge/server` is Bun-only and distributed via source/Docker, not npm.)
+
+**Docker image (self-contained server) → Docker Hub:**
+```bash
+docker login
+scripts/publish-image.sh <dockerhub-namespace> 1.0.0   # builds + tags + pushes :1.0.0 and :latest
+# users then: docker run --rm -p 8787:8787 -v ~/.termbridge/home:/home/tb/.termbridge/home <ns>/termbridge
+```
+
+**Tag the release:** `git tag -a v1.0.0 -m "v1.0.0" && git push origin v1.0.0`.
+
+## Boundary
+termbridge pilots a CLI as-is. It has **no** detection/evasion features (humanized timing, account
+rotation, fingerprint spoofing) and will not accept them. Fleet-automating a subscription may violate the
+provider's terms — use responsibly.

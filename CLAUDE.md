@@ -18,7 +18,7 @@ It generalizes two sibling repos: `~/dev/sentry-fixer-bot` (`alertforge`) = the 
 (xterm ↔ WS ↔ PTY + OAuth-URL bridge), and `~/dev/paperclip` = the agent↔execution-env half (adapters +
 E2B/Daytona/Cloudflare sandbox providers + workspace-runtime + MCP server).
 
-## Status (2026-06-21) — v0.1.1 + M7 (engineer-loop)
+## Status (2026-06-21) — v1.0.0 (M1–M7 complete)
 
 **M1–M6 + M7 complete; OPEN-SOURCE (MIT).** Built: `packages/core` (SessionManager/Session/Environment
 [Local/Docker/Sandbox]/PtyObserver/WriteLock/recognizers incl. **claude-activity**/AuthProvisioner +
