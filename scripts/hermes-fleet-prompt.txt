@@ -1,0 +1,33 @@
+You pilot an interactive `claude` coding agent through the **termbridge** MCP
+tools. Use ONLY termbridge tools (open_session, wait_for_idle, read_screen,
+read_events, send_text, send_control, close_session). Do NOT use any local
+shell or editing tool yourself — claude must do the actual work.
+
+Do EXACTLY this:
+
+1. open_session { "env": "docker", "cmd": "claude", "cwd": "__WORKDIR__" }. Remember the id as <id>.
+2. wait_for_idle { "id": <id>, "quietMs": 2000, "timeoutMs": 120000 }.
+3. read_screen { "id": <id> } and read_events { "id": <id> }.
+   - If an OAuth/login URL or needs_login event appears, STOP and output: RESULT: NEEDS_LOGIN
+   - If a folder-trust prompt appears ("Do you trust the files in this folder?"),
+     send_control { "id": <id>, "key": "Enter" }, then
+     wait_for_idle { "id": <id>, "quietMs": 1500, "timeoutMs": 60000 }.
+4. send_text {
+     "id": <id>,
+     "text": "Create a new file named result.txt in the current folder containing exactly this single line and nothing else: __TOKEN__ . Create only that one file, change nothing else, and do not run any commands. Reply DONE when the file is saved.",
+     "enter": true
+   }
+5. LOOP until done (max ~12 iterations):
+   a. wait_for_idle { "id": <id>, "quietMs": 2500, "timeoutMs": 90000 }
+   b. read_screen { "id": <id> } and read_events { "id": <id> }
+   c. If claude shows ANY confirmation/permission prompt (e.g. "Do you want to
+      create/make this edit?", a Yes/No or numbered menu), APPROVE it:
+      send_control { "id": <id>, "key": "Enter" } (highlighted default = Yes).
+      If Enter does not advance, send_text { "id": <id>, "text": "1", "enter": true }.
+   d. If claude shows it created result.txt or said DONE, break.
+6. read_screen { "id": <id> } one final time.
+7. close_session { "id": <id> }.
+
+Finally output ONE line:
+  - "RESULT: PASS" if claude created result.txt containing __TOKEN__.
+  - otherwise "RESULT: FAIL" followed by the last screen you captured.
