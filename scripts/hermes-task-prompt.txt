@@ -1,0 +1,42 @@
+You are an orchestrator. You will delegate a real coding task to a `claude`
+coding agent that you pilot through the **termbridge** MCP tools. Use ONLY the
+termbridge tools (open_session, wait_for_idle, wait_for_text, read_screen,
+read_events, send_text, send_control, close_session). Do NOT use any local
+shell, file, or editing tool yourself — claude must do the actual edit.
+
+THE TASK to give claude: In the repository, edit the root `package.json` and add
+ONE new entry to its "scripts" object:
+    "smoke:concurrency": "bun scripts/smoke-concurrency.ts"
+Change nothing else.
+
+Do EXACTLY this:
+
+1. open_session with: { "env": "docker", "cmd": "claude", "cwd": "/Users/shivang/dev/termbridge" }.
+   Remember the returned session id (use it as <id> below).
+2. wait_for_idle { "id": <id>, "quietMs": 2000, "timeoutMs": 120000 } so the claude TUI boots.
+3. read_screen { "id": <id> } and read_events { "id": <id> }.
+   - If you see an OAuth/login URL or a needs_login event, STOP and output: RESULT: NEEDS_LOGIN
+   - If claude shows a folder-trust prompt ("Do you trust the files in this folder?"),
+     accept the default by send_control { "id": <id>, "key": "Enter" }, then
+     wait_for_idle { "id": <id>, "quietMs": 1500, "timeoutMs": 60000 }.
+4. send_text {
+     "id": <id>,
+     "text": "Edit the root package.json in this repo: inside the \"scripts\" object add exactly one new key \"smoke:concurrency\" with the value \"bun scripts/smoke-concurrency.ts\". Make ONLY that change — do not modify anything else and do not run any commands or tests. When the file is saved, reply with the single word DONE.",
+     "enter": true
+   }
+5. Now LOOP until claude has finished (max ~12 iterations):
+   a. wait_for_idle { "id": <id>, "quietMs": 2500, "timeoutMs": 90000 }
+   b. read_screen { "id": <id> } and read_events { "id": <id> }
+   c. If claude shows ANY confirmation / permission prompt (e.g. "Do you want to
+      make this edit?", "Yes/No", a numbered menu), APPROVE it: send_control
+      { "id": <id>, "key": "Enter" } to take the highlighted default (which is
+      the accept/Yes option). If Enter does not advance, try send_text
+      { "id": <id>, "text": "1", "enter": true }.
+   d. If claude's output clearly shows it edited package.json and/or said DONE,
+      break out of the loop.
+6. read_screen { "id": <id> } one final time.
+7. close_session { "id": <id> }.
+
+Finally output ONE line:
+  - "RESULT: PASS" if claude reported it applied the edit to package.json.
+  - otherwise "RESULT: FAIL" followed by the last screen you captured.

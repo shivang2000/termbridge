@@ -12,7 +12,8 @@
 		"lint": "turbo lint",
 		"typecheck": "turbo typecheck",
 		"dev": "turbo dev",
-		"check": "biome check --write ."
+		"check": "biome check --write .",
+		"smoke:concurrency": "bun scripts/smoke-concurrency.ts"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.2.0",
