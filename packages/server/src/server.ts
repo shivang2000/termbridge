@@ -111,6 +111,30 @@ export function createTermbridgeServer(opts: TermbridgeServerOptions): Termbridg
 		}),
 	);
 
+	// One-click Claude login VIA the app: open (or reuse) a `claude` session and
+	// send the human to the watch UI, where the oauth-url card lets them sign in.
+	// The login persists on TERMBRIDGE_HOME and is reused by every later session,
+	// so this is the one-time "log in to Claude through termbridge" entry point.
+	app.get("/login", async (c) => {
+		if (!isAuthorized({ token, url: c.req.url, authHeader: c.req.header("authorization") })) {
+			return c.json({ ok: false, error: "unauthorized" }, 401);
+		}
+		let id: string;
+		try {
+			const session = await manager.open({ cmd: "claude" });
+			id = session.id;
+		} catch {
+			// Cap reached or open failed — reuse an existing session if there is one.
+			const existing = manager.list()[0];
+			if (!existing) {
+				return c.json({ ok: false, error: "could not open a session" }, 503);
+			}
+			id = existing.id;
+		}
+		const qs = token ? `?session=${id}&token=${encodeURIComponent(token)}` : `?session=${id}`;
+		return c.redirect(`/${qs}`);
+	});
+
 	// Static xterm client (vite build output). Best-effort: 404s if not built.
 	const clientDir = opts.clientDir ?? "./packages/server/client/dist";
 	app.get("/", serveStatic({ path: `${clientDir}/index.html` }));

@@ -127,17 +127,27 @@ A self-contained image runs the unified server (web UI + HTTP tool API); session
 container (`env:"local"`), so there's nothing to build:
 
 ```bash
-# one-time subscription login into a creds volume:
-docker run --rm -it -v ~/.termbridge/home:/home/tb/.termbridge/home \
-  -e HOME=/home/tb/.termbridge/home shivang2000/termbridge claude
-# then run the server (token-gated; bound to your loopback):
+mkdir -p ~/.termbridge/home          # persistent creds volume — your claude login is saved here
 docker run --rm -p 127.0.0.1:8787:8787 \
   -v ~/.termbridge/home:/home/tb/.termbridge/home \
-  -e TERMBRIDGE_TOKEN=choose-a-secret shivang2000/termbridge
-# → http://127.0.0.1:8787/?session=<id>&token=choose-a-secret  +  POST /api/tool/<name>
+  -e TERMBRIDGE_TOKEN=choose-a-secret \
+  shivang2000/termbridge
 ```
 
-Build/publish it yourself with `scripts/publish-image.sh <namespace> 1.0.0` (see `docker/Dockerfile.server`).
+**Log in to Claude *through* termbridge (one-time).** Open in your browser:
+
+```
+http://127.0.0.1:8787/login?token=choose-a-secret
+```
+
+termbridge starts a `claude` session and the page shows a **"Sign in" card**: click the link, authorize
+in your browser, then paste the code back into the card. The login is saved to the creds volume and
+**reused by every future session** — you never log in again (and the same volume works for the stdio MCP
+path below). Then watch/type at `…/?session=<id>&token=…`, or drive it from an agent via
+`POST /api/tool/<name>?token=…`.
+
+Build/publish the image yourself with `scripts/publish-image.sh <namespace> 1.0.0` (see
+`docker/Dockerfile.server`).
 
 ### A) Give Claude Code (or any MCP client) the tools — stdio
 
@@ -193,6 +203,46 @@ for verification steps when none are given. Backend-agnostic — pass any `ToolC
 server's `/api/tool`, or in-process specs). Runnable example: `bun scripts/smoke-engineer-loop.ts`. For a
 chat-driven version, see the Hermes `engineer-loop` skill in [`docs/integration/hermes.md`](docs/integration/hermes.md)
 (pin `TERMBRIDGE_ALLOWED_ENVS=docker` for that untrusted path).
+
+## Walkthrough — set it up on your laptop and hand off a ticket
+
+The real workflow: get termbridge running, log in to Claude once, then delegate a ticket and watch it work.
+
+**1 · Run the server + bind the repo you want worked on.** Mount your project so the in-container `claude`
+can edit it:
+
+```bash
+mkdir -p ~/.termbridge/home
+docker run --rm -p 127.0.0.1:8787:8787 \
+  -v ~/.termbridge/home:/home/tb/.termbridge/home \
+  -v /path/to/your/repo:/work \
+  -e TERMBRIDGE_TOKEN=choose-a-secret \
+  shivang2000/termbridge
+```
+
+**2 · Log in to Claude through the app (one-time).** Open
+`http://127.0.0.1:8787/login?token=choose-a-secret`, click the **Sign in** card, authorize, paste the
+code back. Saved to the creds volume; reused forever.
+
+**3 · Hand off the ticket.** From a checkout of this repo, give the loop the ticket as the task:
+
+```bash
+bun scripts/engineer.ts \
+  --server http://127.0.0.1:8787 --token choose-a-secret \
+  --repo /work \
+  --goal "PROJ-123: <ticket title> — <paste description>" \
+  --accept "<acceptance criterion 1>" --accept "<criterion 2>" \
+  --verify "npm test"
+```
+
+The loop sends claude the ticket, **auto-approves its edits**, runs `--verify` each round, and stops when
+the acceptance criteria pass (or asks you for verification steps if you gave none). Watch it live at
+`http://127.0.0.1:8787/?session=<id>&token=…` and review the diff in your repo when it finishes.
+
+> No clone? The same loop is the Hermes **`engineer-loop`** skill — DM an agent the ticket and it drives
+> termbridge for you. An agent with a Jira tool (e.g. Hermes + a Jira MCP) can fetch the ticket itself and
+> hand it to the loop; termbridge stays the substrate (it doesn't pull from Jira). See
+> [docs/integration/hermes.md](docs/integration/hermes.md).
 
 ## MCP tool surface (13 tools)
 
