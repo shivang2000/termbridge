@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.0.1 — 2026-06-21
+
+Usability: log in to Claude **through** termbridge, and hand off a ticket in one command.
+
+- **`GET /login`** (unified server, token-gated): opens a `claude` session and redirects to the watch UI,
+  where the oauth-url card lets a human sign in. Login persists on the creds volume and is reused by every
+  later session — the one-time "log in to Claude via termbridge" entry point.
+- **`scripts/engineer.ts`** CLI: hand a coding task (e.g. a Jira ticket) to a running server's engineering
+  loop over the HTTP tool API and stream progress.
+- README: a "set it up on your laptop and hand off a ticket" walkthrough; Quickest section leads with
+  `/login`. Published image `shivang2000/termbridge:1.0.1` (+ `:latest`).
+
 ## v1.0.0 — 2026-06-21
 
 First stable release. An automated agent can pilot a real logged-in `claude` TUI to do coding work on a

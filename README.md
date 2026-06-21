@@ -61,15 +61,15 @@ many sessions in parallel, each piloting its own `claude`, sharing one subscript
 | `packages/orchestrator` | Reusable iterate-until-done **engineering loop** (`runEngineerLoop`) over the tool surface — agent-agnostic, consumer-side (D8: not in core) |
 | `packages/claude-code-plugin` | Turnkey Claude Code plugin that registers the termbridge MCP server |
 
-## Status — v1.0.0
+## Status — v1.0.1
 
-**M1–M7 complete; first stable release.** An agent piloted a real logged-in `claude` TUI through the tool
+**M1–M7 complete; stable.** An agent piloted a real logged-in `claude` TUI through the tool
 surface to edit a bound git repo while a human watched live — subscription auth, no API key. Proven
 end-to-end through a third-party runtime (Hermes): single drive, a real repo edit, a parallel fleet each
 piloting its own `claude`, the concurrency cap, and the **autonomous engineering loop** (claude fixed a
 failing test, host-verified). ~900 unit tests; real tmux / Docker / MCP / web (Playwright) / auth /
 concurrency / engineer-loop / docker-only-guard / Hermes smokes all green; CI gates typecheck+lint+test.
-Published image: `shivang2000/termbridge:1.0.0`. See [CHANGELOG](CHANGELOG.md).
+Published image: `shivang2000/termbridge:1.0.1` (+ `:latest`). See [CHANGELOG](CHANGELOG.md).
 
 Optional/not-yet-shipped: a concrete cloud sandbox provider (E2B — needs creds), and a streamable-HTTP MCP
 transport on `packages/server` (today it speaks the custom `/api/tool` HTTP API; MCP clients use the stdio
