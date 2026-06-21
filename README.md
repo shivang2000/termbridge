@@ -128,11 +128,11 @@ container (`env:"local"`), so there's nothing to build:
 ```bash
 # one-time subscription login into a creds volume:
 docker run --rm -it -v ~/.termbridge/home:/home/tb/.termbridge/home \
-  -e HOME=/home/tb/.termbridge/home <namespace>/termbridge claude
+  -e HOME=/home/tb/.termbridge/home shivang2000/termbridge claude
 # then run the server (token-gated; bound to your loopback):
 docker run --rm -p 127.0.0.1:8787:8787 \
   -v ~/.termbridge/home:/home/tb/.termbridge/home \
-  -e TERMBRIDGE_TOKEN=choose-a-secret <namespace>/termbridge
+  -e TERMBRIDGE_TOKEN=choose-a-secret shivang2000/termbridge
 # → http://127.0.0.1:8787/?session=<id>&token=choose-a-secret  +  POST /api/tool/<name>
 ```
 
