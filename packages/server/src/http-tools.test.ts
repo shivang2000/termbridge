@@ -19,13 +19,14 @@ function fakeManager(): SessionManager {
 }
 
 describe("createToolDispatch", () => {
-	test("exposes the §6 tool surface (11 core + wait_for_event)", () => {
+	test("exposes the §6 tool surface (11 core + wait_for_event + read_progress)", () => {
 		const d = createToolDispatch(fakeManager());
 		expect(d.names).toContain("open_session");
 		expect(d.names).toContain("send_text");
 		expect(d.names).toContain("close_session");
 		expect(d.names).toContain("wait_for_event");
-		expect(d.names).toHaveLength(12);
+		expect(d.names).toContain("read_progress");
+		expect(d.names).toHaveLength(13);
 	});
 
 	test("open_session → send_text over the shared manager", async () => {

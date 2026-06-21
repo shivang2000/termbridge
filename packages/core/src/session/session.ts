@@ -153,6 +153,11 @@ export class Session {
 		return this.observer.buffer(opts.sinceOffset);
 	}
 
+	/** Millisecond timestamp of the observer's most recent output activity. */
+	lastActivityAt(): number {
+		return this.observer.lastActivityAt();
+	}
+
 	/**
 	 * Resolve once the session has been quiet for `quietMs`, or `{ idle:false }`
 	 * at `timeoutMs`. Never hangs: bounded by timeout, polled via injected sleep.

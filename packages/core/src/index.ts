@@ -12,6 +12,7 @@ export * from "./env/sandbox.js";
 export * from "./manager.js";
 // per-session PTY observer (D6)
 export * from "./observer/pty-observer.js";
+export * from "./recognizers/claude-activity.js";
 export * from "./recognizers/claude-permission.js";
 export * from "./recognizers/generic-yn.js";
 export * from "./recognizers/oauth-url.js";

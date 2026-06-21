@@ -10,7 +10,7 @@
 // return the core SendResult AS DATA — including { ok:false, error:"human_driving" }
 // when a human is driving — they do NOT throw on that case.
 
-import type { SessionManager } from "@termbridge/core";
+import { claudeActivityRecognizer, type SessionManager } from "@termbridge/core";
 import { z } from "zod";
 
 export interface ToolSpec {
@@ -114,6 +114,43 @@ export function createToolSpecs(manager: SessionManager): ToolSpec[] {
 			handler: async (args) => {
 				const s = require_(args.id);
 				return s.readNewOutput({ sinceOffset: args.sinceOffset });
+			},
+		},
+		{
+			name: "read_progress",
+			description:
+				"One-shot progress poll for a driving loop: returns { delta, nextOffset, events, phase, " +
+				"awaitingInput, idle, lastActivityAt }. delta/nextOffset are the new bytes since sinceOffset " +
+				"(like read_new_output); events are the recognized events (like read_events). `phase` is the " +
+				"claude-activity phase of the CURRENT screen (tool|editing|thinking|awaiting_input|idle|null). " +
+				"`idle` is true only when there is no new output AND no active phase — so a pre-painted " +
+				"permission prompt or a running spinner correctly reads as NOT idle. `awaitingInput` flags a " +
+				"blocking approval. For authoritative round-complete prefer wait_for_idle; use this to stream.",
+			inputSchema: { id, sinceOffset: nonNegInt },
+			handler: async (args) => {
+				const s = require_(args.id);
+				const { data: delta, nextOffset } = s.readNewOutput({ sinceOffset: args.sinceOffset });
+				const { events } = await s.readEvents({ sinceOffset: args.sinceOffset });
+				// Classify the CURRENT screen so `idle` reflects what is painted now, not
+				// merely "no bytes since the cursor": a permission prompt or spinner already
+				// on screen before this poll must read as NOT idle.
+				const screen = await s.readScreen();
+				const act = claudeActivityRecognizer.match(screen, delta);
+				const phase = (act?.data.phase as string | undefined) ?? null;
+				const activeWork =
+					phase === "thinking" ||
+					phase === "tool" ||
+					phase === "editing" ||
+					phase === "awaiting_input";
+				return {
+					delta,
+					nextOffset,
+					events,
+					phase,
+					awaitingInput: phase === "awaiting_input",
+					idle: delta.length === 0 && !activeWork,
+					lastActivityAt: s.lastActivityAt(),
+				};
 			},
 		},
 		{

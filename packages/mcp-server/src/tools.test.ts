@@ -78,6 +78,7 @@ describe("createToolSpecs — surface", () => {
 				"open_session",
 				"read_events",
 				"read_new_output",
+				"read_progress",
 				"read_screen",
 				"resize",
 				"send_control",
@@ -178,6 +179,7 @@ describe("createToolSpecs — unknown id", () => {
 		"send_control",
 		"read_screen",
 		"read_new_output",
+		"read_progress",
 		"wait_for_idle",
 		"wait_for_text",
 		"read_events",
@@ -200,6 +202,96 @@ describe("createToolSpecs — unknown id", () => {
 			).rejects.toThrow("session not found: ghost");
 		});
 	}
+});
+
+describe("createToolSpecs — read_progress", () => {
+	/** A stub session exposing exactly the methods read_progress composes. */
+	function stub(o: {
+		delta: string;
+		nextOffset: number;
+		events?: unknown[];
+		screen: string;
+		lastActivityAt?: number;
+	}): SessionManager {
+		return {
+			get: () => ({
+				readNewOutput: (_o: { sinceOffset?: number }) => ({
+					data: o.delta,
+					nextOffset: o.nextOffset,
+				}),
+				readEvents: async () => ({ events: o.events ?? [], nextOffset: o.nextOffset }),
+				readScreen: async () => o.screen,
+				lastActivityAt: () => o.lastActivityAt ?? 0,
+			}),
+		} as unknown as SessionManager;
+	}
+
+	test("idle:true when no new output AND the current screen has no active phase", async () => {
+		const specs = createToolSpecs(
+			stub({ delta: "", nextOffset: 5, screen: "", lastActivityAt: 1234 }),
+		);
+		const res = (await spec(specs, "read_progress").handler({ id: "any", sinceOffset: 5 })) as {
+			delta: string;
+			nextOffset: number;
+			events: unknown[];
+			phase: string | null;
+			awaitingInput: boolean;
+			idle: boolean;
+			lastActivityAt: number;
+		};
+		expect(res.delta).toBe("");
+		expect(res.nextOffset).toBe(5);
+		expect(res.events).toHaveLength(0);
+		expect(res.phase).toBeNull();
+		expect(res.awaitingInput).toBe(false);
+		expect(res.idle).toBe(true);
+		expect(res.lastActivityAt).toBe(1234);
+	});
+
+	test("idle:false when new output arrived", async () => {
+		const specs = createToolSpecs(
+			stub({
+				delta: "new bytes",
+				nextOffset: 9,
+				screen: "",
+				events: [{ kind: "claude-activity", data: { phase: "tool" }, suggestedKeys: [] }],
+			}),
+		);
+		const res = (await spec(specs, "read_progress").handler({ id: "any" })) as {
+			delta: string;
+			idle: boolean;
+			events: Array<{ kind: string }>;
+		};
+		expect(res.delta).toBe("new bytes");
+		expect(res.idle).toBe(false);
+		expect(res.events[0]?.kind).toBe("claude-activity");
+	});
+
+	test("idle:false + awaitingInput:true on a pre-painted permission prompt with NO new bytes", async () => {
+		// The loop-breaking case: nothing new since the cursor, but the screen is
+		// blocked on an approval. Empty-delta must NOT read as done.
+		const screen = "● Update(app.ts)\nDo you want to make this edit?\n❯ 1. Yes\n  2. No\n";
+		const specs = createToolSpecs(stub({ delta: "", nextOffset: 7, screen }));
+		const res = (await spec(specs, "read_progress").handler({ id: "any", sinceOffset: 7 })) as {
+			phase: string | null;
+			awaitingInput: boolean;
+			idle: boolean;
+		};
+		expect(res.phase).toBe("awaiting_input");
+		expect(res.awaitingInput).toBe(true);
+		expect(res.idle).toBe(false);
+	});
+
+	test("idle:false on an active spinner with NO new bytes (thinking pause)", async () => {
+		const screen = "✻ Cogitating… (6s · esc to interrupt)\n";
+		const specs = createToolSpecs(stub({ delta: "", nextOffset: 3, screen }));
+		const res = (await spec(specs, "read_progress").handler({ id: "any", sinceOffset: 3 })) as {
+			phase: string | null;
+			idle: boolean;
+		};
+		expect(res.phase).toBe("thinking");
+		expect(res.idle).toBe(false);
+	});
 });
 
 describe("createToolSpecs — wait_for_event", () => {

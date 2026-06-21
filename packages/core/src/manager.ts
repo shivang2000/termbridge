@@ -17,6 +17,7 @@ import { AuthProvisioner } from "./auth/provisioner.js";
 import { DockerEnvironment } from "./env/docker.js";
 import { LocalEnvironment } from "./env/local.js";
 import { PtyObserver, type ReadAppended } from "./observer/pty-observer.js";
+import { claudeActivityRecognizer } from "./recognizers/claude-activity.js";
 import { claudePermissionRecognizer } from "./recognizers/claude-permission.js";
 import { genericYnRecognizer } from "./recognizers/generic-yn.js";
 import { oauthUrlRecognizer } from "./recognizers/oauth-url.js";
@@ -365,6 +366,7 @@ export class SessionManager {
 		pipeline.register(claudePermissionRecognizer);
 		pipeline.register(genericYnRecognizer);
 		pipeline.register(rateLimitRecognizer);
+		pipeline.register(claudeActivityRecognizer);
 		observer.start();
 
 		const session = new Session({
