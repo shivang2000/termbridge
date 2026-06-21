@@ -33,6 +33,10 @@
         "zod": "^3.24.2",
       },
     },
+    "packages/orchestrator": {
+      "name": "@termbridge/orchestrator",
+      "version": "0.1.0",
+    },
     "packages/server": {
       "name": "@termbridge/server",
       "version": "0.1.0",
@@ -184,6 +188,8 @@
     "@termbridge/core": ["@termbridge/core@workspace:packages/core"],
 
     "@termbridge/mcp-server": ["@termbridge/mcp-server@workspace:packages/mcp-server"],
+
+    "@termbridge/orchestrator": ["@termbridge/orchestrator@workspace:packages/orchestrator"],
 
     "@termbridge/server": ["@termbridge/server@workspace:packages/server"],
 
