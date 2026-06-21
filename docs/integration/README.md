@@ -28,7 +28,7 @@ Environment:
 
 One-time login (creds then reused by every session — see the auth section below).
 
-## Tool surface (§6 — 12 tools)
+## Tool surface (§6 — 13 tools)
 
 | Tool | Args | Returns |
 |---|---|---|

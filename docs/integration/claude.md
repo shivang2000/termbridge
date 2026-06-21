@@ -12,7 +12,7 @@ claude mcp add termbridge \
 # after npm publish:  -- npx -y @termbridge/mcp-server
 ```
 
-`claude mcp list` should show `termbridge` with the 12 tools.
+`claude mcp list` should show `termbridge` with the 13 tools.
 
 ## Worked example (drive a Dockerized claude to edit a repo)
 

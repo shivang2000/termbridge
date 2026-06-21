@@ -27,7 +27,7 @@ In opencode's config (`opencode.json` / the MCP section), add a local (stdio) MC
 After npm publish: `"command": ["npx", "-y", "@termbridge/mcp-server"]`.
 
 ## Driving
-Same 12-tool surface + canonical loop as the other agents — see [README](./README.md) and
+Same 13-tool surface + canonical loop as the other agents — see [README](./README.md) and
 [`examples/drive-claude.ts`](../../examples/drive-claude.ts).
 
 > Status: config shape per opencode's MCP docs; field names may differ by version — adjust to your

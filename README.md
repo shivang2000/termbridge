@@ -56,8 +56,9 @@ many sessions in parallel, each piloting its own `claude`, sharing one subscript
 | Package | Role |
 |---|---|
 | `packages/core` | Framework-agnostic library: `SessionManager`, `Session`, `Environment` (`Local`/`Docker`/`Sandbox`), `PtyObserver`, `WriteLock`, recognizers, `AuthProvisioner` |
-| `packages/mcp-server` | MCP **stdio** server exposing the 12-tool surface over core (the canonical agent interface) |
+| `packages/mcp-server` | MCP **stdio** server exposing the 13-tool surface over core (the canonical agent interface) |
 | `packages/server` | Unified Bun+Hono server: web WS bridge (watch + intervene) **and** an HTTP tool API, over one shared `SessionManager` |
+| `packages/orchestrator` | Reusable iterate-until-done **engineering loop** (`runEngineerLoop`) over the tool surface — agent-agnostic, consumer-side (D8: not in core) |
 | `packages/claude-code-plugin` | Turnkey Claude Code plugin that registers the termbridge MCP server |
 
 ## Status — v0.1.1
@@ -156,7 +157,7 @@ Register termbridge as an MCP server in the runtime, then prompt the agent to us
 one-shot that has the agent pilot `claude` in a bound repo:
 
 ```bash
-hermes mcp test termbridge      # confirm connection + 12 tools
+hermes mcp test termbridge      # confirm connection + 13 tools
 hermes -z "$(cat scripts/hermes-task-prompt.txt)"   # agent opens a docker claude session, does the task
 ```
 
@@ -164,7 +165,17 @@ See [`docs/integration/`](docs/integration/) for per-runtime guides (`claude`, `
 `opencode`) and `scripts/hermes-*.txt` for ready-made delegation prompts (single drive, concurrency,
 parallel fleet).
 
-## MCP tool surface (12 tools)
+### D) Autonomous engineering loop (iterate-until-done + live progress)
+
+`@termbridge/orchestrator`'s `runEngineerLoop` drives a session to deliver a goal against acceptance
+criteria: it sends a structured prompt, streams a progress digest each ~25s tick (`onDigest`),
+auto-approves edit prompts, gates "done" on the repo's tests (a `TB_LOOP_DONE: PASS` marker), and asks
+for verification steps when none are given. Backend-agnostic — pass any `ToolCall` (stdio MCP, the
+server's `/api/tool`, or in-process specs). Runnable example: `bun scripts/smoke-engineer-loop.ts`. For a
+chat-driven version, see the Hermes `engineer-loop` skill in [`docs/integration/hermes.md`](docs/integration/hermes.md)
+(pin `TERMBRIDGE_ALLOWED_ENVS=docker` for that untrusted path).
+
+## MCP tool surface (13 tools)
 
 | Tool | Purpose |
 |---|---|
@@ -174,6 +185,7 @@ parallel fleet).
 | `send_control` | Send a control/named key (`C-c`, `Up`, `Enter`, …) |
 | `read_screen` | Capture the visible pane (optional scrollback / ANSI escapes) |
 | `read_new_output` | Bytes appended to the rolling buffer since an offset |
+| `read_progress` | One-shot poll for a driving loop → `{ delta, nextOffset, events, phase, awaitingInput, idle, lastActivityAt }` |
 | `wait_for_idle` | Resolve once quiet for `quietMs`, or time out (never hangs) |
 | `wait_for_text` | Poll the screen until a string/regex matches, or time out |
 | `read_events` | Newly-recognized interactive events (oauth-url, permission, needs_login, …) |
