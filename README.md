@@ -55,6 +55,9 @@ built (walkthrough below). *Fetching* the ticket from Jira is the agent's job �
 tool/MCP; termbridge pilots Claude, it doesn't pull from Jira. Run it today with no Jira tool by pasting
 the ticket text into `scripts/engineer.ts`.
 
+➜ **Set up Hermes for this flow** (install the MCP server + skill, log in, then chat a ticket):
+**[docs/integration/hermes.md](docs/integration/hermes.md)**.
+
 ## Ways to use it
 
 | You are… | You do… | Where |

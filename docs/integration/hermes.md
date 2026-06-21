@@ -1,64 +1,96 @@
-# Integrating termbridge into Hermes (or any MCP agent)
+# termbridge × Hermes — install & use (chat a ticket → Claude Code ships it)
 
-Hermes (or any open-source MCP-capable agent) pilots `claude` through termbridge's stdio MCP server.
+The headline flow: you drop a ticket in your channel, Hermes opens **Claude Code** through termbridge with
+a sharp engineering prompt, auto-approves the routine edits, runs your tests, and streams progress + the
+final review back to the channel — all on your Claude **subscription**.
 
-## MCP server config
-
-Standard MCP `mcpServers` stdio entry (place it wherever the agent loads MCP servers):
-
-```jsonc
-{
-  "mcpServers": {
-    "termbridge": {
-      "command": "bun",
-      "args": ["/ABS/PATH/termbridge/packages/mcp-server/src/stdio.ts"],
-      "env": {
-        "TERMBRIDGE_HOME": "/var/lib/termbridge/home",
-        "TERMBRIDGE_TMUX_SOCKET": "termbridge",
-        "TERMBRIDGE_MAX_SESSIONS": "4"
-      }
-    }
-  }
-}
+```
+You ─ "@bot ship PROJ-123" ─▶ Hermes ──(termbridge MCP)──▶ claude (docker, subscription) edits your repo
+                                  ▲                                  │ auto-approve · run tests · iterate
+                                  └──── ~25s progress + review ──────┘   (back in your channel)
 ```
 
-After npm publish: `"command": "npx", "args": ["-y", "@termbridge/mcp-server"]`.
+Hermes does the orchestration (fetch the ticket, run the loop); termbridge is the substrate that pilots
+Claude. This works with any MCP-capable agent — Hermes is the worked example.
 
-## Driving
-The agent calls the 13 §6 tools (see [README](./README.md)). The canonical loop — open → send task →
-`wait_for_event` for `claude-permission` → answer with `suggestedKeys` → read result — is in
-[`examples/drive-claude.ts`](../../examples/drive-claude.ts). Handle `needs_login`, `rate_limited`,
-`human_took_over`.
+---
 
-> Status: documented against the stdio contract; live-validate in the Hermes runtime. Any MCP client that
-> can spawn a stdio server + call tools works the same way.
+## Install (one-time)
 
-## Autonomous engineering loop + live progress (M7)
+**Prereqs on the host:** `bun` ≥ 1.3, `docker`, `tmux`, a Claude subscription. (The MCP server runs on
+bun; sessions run `claude` in per-session Docker containers.)
 
-Beyond one-shot driving, the `engineer-loop` skill (vendored in the repo at
-[`skills/engineer-loop/SKILL.md`](../../skills/engineer-loop/SKILL.md) — copy it to
-`~/.hermes/skills/engineer-loop/SKILL.md`) lets Hermes
-take a coding task from the user, drive `claude` to completion through the tools, and stream ~25s progress
-digests back (e.g. to a Discord thread). It self-verifies with the repo's tests and **asks for
-verification steps if the user gives none**. It uses `read_progress` (phase + delta + idle) for the
-digests and `wait_for_idle` for authoritative round-complete, gating "done" on a `TB_LOOP_DONE: PASS`
-marker claude prints after its tests pass.
-
-**Lock the gateway to containers.** A chat-triggered loop runs `open_session`, which defaults to the
-host. Pin the termbridge MCP server to docker so it can never execute on the host:
-
-```yaml
-mcp_servers:
-  termbridge:
-    command: bun
-    args: [/ABS/PATH/termbridge/packages/mcp-server/src/stdio.ts]
-    env:
-      TERMBRIDGE_HOME: /Users/you/.termbridge/home
-      TERMBRIDGE_TMUX_SOCKET: termbridge
-      TERMBRIDGE_ALLOWED_ENVS: docker      # untrusted caller → docker-only (rejects env:local)
-      TERMBRIDGE_MAX_SESSIONS: "3"
+### 1. Get termbridge + the per-session image
+```bash
+git clone https://github.com/shivang2000/termbridge.git
+cd termbridge && bun install
+docker build -t termbridge:dev -f docker/Dockerfile .   # the sandbox each session runs claude in
 ```
 
-The reusable, agent-agnostic version of the same loop is `@termbridge/orchestrator` (`runEngineerLoop`) —
-drive it from any runtime over a `ToolCall` (stdio MCP, the server's `/api/tool`, or in-process specs).
-See `scripts/smoke-engineer-loop.ts` for a runnable end-to-end example.
+### 2. Log in to Claude once (creds persist + are shared by every session)
+```bash
+mkdir -p ~/.termbridge/home
+docker run --rm -it -v ~/.termbridge/home:/creds -e HOME=/creds termbridge:dev claude
+# pick "Claude account with subscription", open the URL, paste the code. Done forever.
+```
+
+### 3. Register the MCP server in Hermes — pinned to docker (untrusted chat caller)
+```bash
+hermes mcp add termbridge \
+  --env TERMBRIDGE_HOME="$HOME/.termbridge/home" TERMBRIDGE_TMUX_SOCKET=termbridge \
+        TERMBRIDGE_ALLOWED_ENVS=docker TERMBRIDGE_MAX_SESSIONS=3 \
+  --command bun \
+  --args /ABS/PATH/termbridge/packages/mcp-server/src/stdio.ts
+```
+`TERMBRIDGE_ALLOWED_ENVS=docker` means a chat-triggered session can **never** run on the host — only in a
+container. (Equivalent manual edit: add the same block under `mcp_servers:` in `~/.hermes/config.yaml`.)
+
+### 4. Install the engineer-loop skill
+```bash
+hermes skills install \
+  https://raw.githubusercontent.com/shivang2000/termbridge/main/skills/engineer-loop/SKILL.md --yes
+# or, from your clone:  mkdir -p ~/.hermes/skills/engineer-loop && \
+#   cp skills/engineer-loop/SKILL.md ~/.hermes/skills/engineer-loop/SKILL.md
+```
+
+### 5. (Optional) give Hermes a Jira/tracker tool
+So it can fetch a ticket by reference (`PROJ-123`). Without one, paste the ticket text in chat — the skill
+uses that. termbridge does not pull from Jira; that's the agent's tool.
+
+### 6. Verify + apply
+```bash
+hermes mcp test termbridge        # → ✓ Connected, 13 tools
+hermes gateway restart            # picks up the MCP env + the skill (restart kills running agents)
+```
+
+---
+
+## Use it (in chat)
+
+Mention the bot with the ticket and the repo to work in:
+
+> **@bot use the engineer-loop skill: ship PROJ-123 in `/work`. verify with `npm test`.**
+
+Hermes will: fetch/parse the ticket → `open_session` (docker, bound to the repo) → send claude the goal +
+acceptance → **auto-approve** its edit/command prompts → run your tests each round → post a one-line digest
+every ~25s → finish with a summary + the diff, or ask for verification steps if you gave none. You can open
+the live browser view (the unified server) and **type to take over** at any point.
+
+> Make sure the repo you name is reachable by the session. Mount/checkout it where the container can see it,
+> or run the unified server with the repo bind-mounted (see the main [README](../../README.md)).
+
+---
+
+## Notes
+
+- **13-tool surface** (see the [README](../../README.md)). The low-level driving contract (open → send →
+  `wait_for_event` for `claude-permission` → answer → read) is in
+  [`examples/drive-claude.ts`](../../examples/drive-claude.ts); handle `needs_login`, `rate_limited`,
+  `human_took_over`.
+- **The same loop without a clone / without chat:** `@termbridge/orchestrator`'s `runEngineerLoop`, or the
+  CLI `scripts/engineer.ts` against a running server — see the README "Walkthrough".
+- **After npm publish** the MCP server install becomes `--command npx --args -y @termbridge/mcp-server`
+  (no clone needed); not published yet.
+- **Safety/limits:** keep `TERMBRIDGE_ALLOWED_ENVS=docker` and a low `TERMBRIDGE_MAX_SESSIONS`.
+  Auto-approval presses through every prompt inside the container — the container is the isolation. Fleet
+  use of a subscription may hit plan limits / terms; cap concurrency.
