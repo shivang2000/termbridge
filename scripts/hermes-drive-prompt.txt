@@ -1,0 +1,25 @@
+You are driving an interactive terminal through the **termbridge** MCP tools.
+You MUST use ONLY the termbridge tools (open_session, wait_for_idle, wait_for_text,
+read_screen, read_events, send_text, send_control, close_session). Do NOT use any
+local shell or other tool. Perform EXACTLY these steps, then stop:
+
+1. Call open_session with: { "env": "docker", "cmd": "claude", "cwd": "/tmp/tb-hermes-test" }.
+   Remember the returned session id.
+2. Call wait_for_idle with { "id": <id>, "quietMs": 1500, "timeoutMs": 90000 } to let
+   the claude TUI finish booting inside the container.
+3. Call read_screen { "id": <id> }. Then call read_events { "id": <id> }.
+   - If you see an OAuth/login URL or a "needs_login" event, STOP and output exactly:
+     RESULT: NEEDS_LOGIN
+   - If claude shows a folder-trust prompt (e.g. "Do you trust the files in this folder?"),
+     accept the default by calling send_control { "id": <id>, "key": "Enter" }, then
+     wait_for_idle again ({ "quietMs": 1500, "timeoutMs": 60000 }).
+4. Call send_text with:
+   { "id": <id>, "text": "Reply with exactly this token on its own line and nothing else: HERMES_DROVE_CLAUDE_OK", "enter": true }
+5. Call wait_for_idle { "id": <id>, "quietMs": 3000, "timeoutMs": 150000 }.
+6. Call read_screen { "id": <id> }.
+7. Call close_session { "id": <id> }.
+
+Finally output one line:
+  - "RESULT: PASS" if the screen from step 6 contains the literal token HERMES_DROVE_CLAUDE_OK
+    appearing as claude's reply (not just your own echoed instruction).
+  - otherwise "RESULT: FAIL" followed by the last screen you captured.
