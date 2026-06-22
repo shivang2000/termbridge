@@ -151,13 +151,19 @@ ENV_PAIRS=( "TERMBRIDGE_HOME=$TERMBRIDGE_HOME" "TERMBRIDGE_TMUX_SOCKET=termbridg
 [ -n "$GH_TOKEN_ARG" ] && ENV_PAIRS+=( "GH_TOKEN=$GH_TOKEN_ARG" )
 
 if [ "$HAS_HERMES" = "true" ]; then
-  step "Registering termbridge in Hermes (mode: $MODE)"
+  step "Registering termbridge in Hermes (mode: $MODE · allowed envs: $ALLOWED_ENVS)"
+  # Re-register on re-run so the requested mode/env always applies (a stale docker-only
+  # registration would otherwise reject env:local). hermes' remove verb varies — try
+  # the common forms, all best-effort, then add.
   if hermes mcp list 2>/dev/null | grep -qw termbridge; then
-    warn "termbridge already registered — leaving it. To change env, edit ~/.hermes/config.yaml or re-add."
-  else
-    hermes mcp add termbridge --env "${ENV_PAIRS[@]}" --command npx --args -y @termbridge/mcp-server \
-      && ok "MCP server registered" || warn "hermes mcp add failed — add it manually (see config block below)."
+    warn "termbridge already registered — re-registering to apply mode=$MODE (allowed: $ALLOWED_ENVS)"
+    hermes mcp remove termbridge >/dev/null 2>&1 \
+      || hermes mcp delete termbridge >/dev/null 2>&1 \
+      || hermes mcp rm termbridge >/dev/null 2>&1 || true
   fi
+  hermes mcp add termbridge --env "${ENV_PAIRS[@]}" --command npx --args -y @termbridge/mcp-server \
+    && ok "MCP server registered (mode=$MODE, envs=$ALLOWED_ENVS)" \
+    || warn "hermes mcp add failed — run: hermes mcp remove termbridge, then re-run setup."
   step "Installing the engineer-loop skill"
   hermes skills install "$SKILL_URL" --yes >/dev/null 2>&1 && ok "skill installed" \
     || warn "skill install failed — run: hermes skills install $SKILL_URL --yes"
@@ -231,12 +237,12 @@ printf '\n%s\n' "Your turn:"
 [ -f "$TERMBRIDGE_HOME/.claude/.credentials.json" ] || \
   printf '  %s\n' "${R}• Log in to Claude${N} (command in the Authentication section above) — required"
 if [ "$RESTART_PENDING" = "true" ]; then
-  printf '  %s\n' "${Y}${B}• ACTION REQUIRED:${N}${Y} restart the gateway to load the MCP server + skill —${N}"
-  printf '  %s\n' "${Y}    it ${B}kills running agents${N}${Y}, so run it when idle:${N}"
+  printf '  %s\n' "${Y}${B}• STEP 1 — restart the gateway${N}${Y} to load the MCP server + skill"
+  printf '  %s\n' "${Y}    (it ${B}kills running agents${N}${Y}, so run it now while idle):${N}"
   printf '      %s\n' "hermes gateway restart"
 fi
-printf '  %s\n' "• Clone the target repo locally (where the session can reach it)"
+printf '  %s\n' "${B}• STEP 2 — paste your ticket task to the bot${N} (it opens Claude, fixes it, opens the PR)"
 
-printf '\n%s\n' "${G}${B}termbridge ready.${N}  mode=$MODE · version=$VERSION · max_sessions=$MAX_SESSIONS"
-printf '%s\n' "Then DM the bot, e.g.:"
+printf '\n%s\n' "${G}${B}termbridge ready.${N}  mode=$MODE (allowed envs: $ALLOWED_ENVS) · version=$VERSION · max_sessions=$MAX_SESSIONS"
+printf '%s\n' "Example task to DM the bot:"
 printf '  %s\n' "${B}@bot use the engineer-loop skill (env: $MODE): ship PROJ-123 in <repo>, verify with <cmd>, open a PR${N}"
