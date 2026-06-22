@@ -25,12 +25,24 @@ wait_for_text, close_session). YOU are the loop.
 
 ## Run the loop
 
-1. `open_session` `{ "env": "docker", "cmd": "claude", "cwd": "<repo>" }`. ALWAYS use `env: "docker"`
-   (never the host). Remember the `id`.
+1. `open_session` `{ "env": <as requested>, "cmd": "claude", "cwd": "<repo>" }`. Use the env the
+   operator/user specifies — `"docker"` by default (isolated), `"local"` when they ask (claude runs on the
+   host's `-L termbridge` tmux; the user's default tmux is never touched). Remember the `id`.
 2. `wait_for_idle` `{ "id", "quietMs": 2500, "timeoutMs": 120000 }` to let the TUI boot.
-3. `read_progress` `{ "id" }`. If `awaitingInput` is true (e.g. the folder-trust gate), approve it with
-   `send_control` `{ "id", "key": "Enter" }`, then `wait_for_idle` again. If a login/OAuth event
-   appears, surface it to the user and stop.
+3. `read_progress` `{ "id" }` (and `read_screen` if unsure). Clear the two boot gates yourself:
+   - **Folder-trust** (`awaitingInput`, "Do you trust…"): approve with `send_control` `{ "id", "key": "Enter" }`,
+     then `wait_for_idle`.
+   - **Not logged in** ("Not logged in · Run /login", or a `needs_login` event): AUTO-DRIVE the login — do
+     NOT make the user run it step by step. (If the session was started with an API key this won't appear.)
+     a. `send_text` `{ "id", "text": "/login", "enter": true }`; `wait_for_idle`.
+     b. `read_screen`; at the method menu pick **subscription**: `send_text` `{ "id", "text": "1", "enter": true }`.
+     c. `wait_for_event` `{ "id", "kinds": ["oauth-url"], "timeoutMs": 60000 }` (or `read_screen`) to get the
+        authorize URL. **Post it to the channel ONCE:** *"Click to authorize, then I'll continue."*
+     d. Poll `wait_for_idle` / `read_screen` until the login card clears / "Logged in" appears (the user
+        finished in the browser); press `Enter` if a "press enter to continue" remains.
+     e. `read_screen` to confirm a clean, empty prompt — login often clears the input line, so the task must
+        be sent fresh in step 4.
+   The user's ONLY action is the single browser click; never ask them to type `/login` or pick the option.
 4. Send the task with `send_text` `{ "id", "enter": true, "text": <engineering prompt> }`. The prompt MUST:
    - State the goal and the acceptance criteria.
    - Tell claude to verify by running the repo's tests (or the user's command).
