@@ -186,6 +186,13 @@ ENV_PAIRS=( "TERMBRIDGE_TMUX_SOCKET=termbridge" \
 # (your claude install + login + MCPs). Setting it would point HOME at the bare creds volume
 # and the host claude couldn't find its install. docker mode needs the shared creds volume.
 [ "$MODE" != "local" ] && ENV_PAIRS+=( "TERMBRIDGE_HOME=$TERMBRIDGE_HOME" )
+# Local mode: auto-forward the host's gh TOKEN so the session's gh works without the
+# macOS keyring (a gateway-spawned gh can't read it → "invalid token", PR push fails).
+# `gh auth token` runs here in your terminal where the keyring IS readable. --gh-token overrides.
+if [ "$MODE" = "local" ] && [ -z "$GH_TOKEN_ARG" ] && command -v gh >/dev/null 2>&1; then
+  GH_TOKEN_ARG="$(gh auth token 2>/dev/null || true)"
+  [ -n "$GH_TOKEN_ARG" ] && ok "forwarding your gh token into sessions (in-session PRs; no keyring needed)"
+fi
 [ -n "$GH_TOKEN_ARG" ] && ENV_PAIRS+=( "GH_TOKEN=$GH_TOKEN_ARG" )
 # API-key auth (forwarded into the session). On macOS local mode this is the reliable path:
 # the subscription login is in the Keychain, which a gateway-spawned claude can't read.
@@ -265,10 +272,12 @@ else
 fi
 # GitHub — to open the PR at the end of the loop. Need depends on mode.
 if [ "$MODE" = "local" ]; then
-  if [ "$HOST_GH_AUTHED" = "true" ]; then
-    authline "GitHub (open PRs)" "${G}✓ host gh authed${N}  — local mode pushes + opens PRs with it"
+  if [ -n "$GH_TOKEN_ARG" ]; then
+    authline "GitHub (open PRs)" "${G}✓ gh token forwarded${N}  — in-session PRs (no keyring needed)"
+  elif [ "$HOST_GH_AUTHED" = "true" ]; then
+    authline "GitHub (open PRs)" "${Y}! host gh authed but keyring-only${N} → a gateway-spawned gh can't read it; pass --gh-token \"\$(gh auth token)\""
   else
-    authline "GitHub (open PRs)" "${R}✗ run: gh auth login${N}  — local mode opens the PR via your host gh"
+    authline "GitHub (open PRs)" "${R}✗ run: gh auth login${N}  — needed to open the PR"
   fi
 else
   if [ -n "$GH_TOKEN_ARG" ]; then
