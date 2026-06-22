@@ -35,6 +35,16 @@ GH_TOKEN=ghp_xxx curl -fsSL …/scripts/setup.sh | bash -s -- --max-sessions 2 -
 It will **not** restart your gateway unless you pass `--restart` (a restart kills running agents). When it
 finishes it prints the exact `hermes gateway restart` to run when idle. `--help` lists every flag.
 
+When it finishes, `setup.sh` prints an **Authentication summary** telling you exactly what's logged in and
+what's still missing. You authenticate three things (termbridge itself never logs in to GitHub/Jira — it
+pilots Claude; the host/agent own those):
+
+| What | Why | How |
+|---|---|---|
+| **Claude (subscription)** | required — everything bills against the plan | `setup.sh` runs the one-time login; or `docker run --rm -it -v $HOME/.termbridge/home:/creds -e HOME=/creds termbridge:dev claude` |
+| **GitHub** | to open the PR at the end of the loop | **local mode:** `gh auth login` on the host. **docker mode:** `--gh-token ghp_xxx` (in-container PR) or host `gh auth login` (host fallback) |
+| **Jira / tracker** | optional — so Hermes can fetch a ticket by id | authenticate your tracker tool **in Hermes**; otherwise paste the ticket text in chat |
+
 Then jump to [Use it](#use-it-in-chat). The manual steps below are what the script automates.
 
 ---

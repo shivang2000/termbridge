@@ -77,6 +77,15 @@ if command -v hermes >/dev/null 2>&1; then HAS_HERMES="true"; ok "hermes CLI pre
   warn "hermes CLI not found — will set everything else up and print the manual MCP/skill steps."
 fi
 
+# GitHub auth (used to open PRs at the end of the loop): host gh and/or a forwarded token.
+HOST_GH_AUTHED="false"
+if command -v gh >/dev/null 2>&1; then
+  if gh auth status >/dev/null 2>&1; then HOST_GH_AUTHED="true"; ok "host gh authenticated"; else
+    warn "host gh present but not logged in — run \`gh auth login\` to let it open PRs."; fi
+else
+  warn "gh (GitHub CLI) not found on host — install + \`gh auth login\` for the host PR path."
+fi
+
 # ---- 2. resolve version ------------------------------------------------------
 step "Resolving termbridge version"
 if [ -z "$VERSION" ]; then
@@ -158,6 +167,35 @@ if [ "$HAS_HERMES" = "true" ]; then
     printf '      %s\n' "hermes gateway restart"
   fi
 fi
+
+# ---- 7. authentication summary — what the user still needs -------------------
+authline() { printf '  %-24s %s\n' "$1" "$2"; }
+step "Authentication — what you need"
+# Claude subscription (this is what the whole thing bills against).
+if [ -f "$TERMBRIDGE_HOME/.claude/.credentials.json" ]; then
+  authline "Claude (subscription)" "${G}✓ logged in${N}  — required; every session reuses these creds"
+else
+  authline "Claude (subscription)" "${R}✗ REQUIRED${N} → docker run --rm -it -v $TERMBRIDGE_HOME:/creds -e HOME=/creds termbridge:dev claude"
+fi
+# GitHub — to open the PR at the end of the loop. Need depends on mode.
+if [ "$MODE" = "local" ]; then
+  if [ "$HOST_GH_AUTHED" = "true" ]; then
+    authline "GitHub (open PRs)" "${G}✓ host gh authed${N}  — local mode pushes + opens PRs with it"
+  else
+    authline "GitHub (open PRs)" "${R}✗ run: gh auth login${N}  — local mode opens the PR via your host gh"
+  fi
+else
+  if [ -n "$GH_TOKEN_ARG" ]; then
+    authline "GitHub (open PRs)" "${G}✓ GH_TOKEN forwarded${N}  — the container opens the PR itself"
+  elif [ "$HOST_GH_AUTHED" = "true" ]; then
+    authline "GitHub (open PRs)" "${G}✓ host gh authed${N}  — host fallback opens the PR (no token needed)"
+  else
+    authline "GitHub (open PRs)" "${Y}! needed for PRs${N} → re-run with --gh-token ghp_xxx (in-container) OR gh auth login (host)"
+  fi
+fi
+# Jira / tracker — Hermes' job, not termbridge's. Informational.
+authline "Jira / tracker" "${D}optional — authenticate your tracker tool IN HERMES so it can fetch tickets; else paste the ticket text${N}"
+printf '  %s\n' "${D}(termbridge never logs in to GitHub/Jira itself — it pilots Claude; the host/agent handle those.)${N}"
 
 printf '\n%s\n' "${G}${B}termbridge ready.${N}  mode=$MODE · version=$VERSION · max_sessions=$MAX_SESSIONS"
 printf '%s\n' "Next: clone the target repo locally, then DM the bot, e.g.:"
