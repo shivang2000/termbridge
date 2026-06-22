@@ -54,13 +54,20 @@ while [ $# -gt 0 ]; do
   esac
 done
 case "$MODE" in docker|local) ;; *) die "--mode must be docker or local (got: $MODE)" ;; esac
-[ "$MODE" = "docker" ] && ALLOWED_ENVS="docker" || ALLOWED_ENVS="local,docker"
+# local = HOST-NATIVE: sessions run on the host with your REAL HOME, so they use your own
+#   `claude` install, its login, and its MCPs (e.g. Jira). No image, no creds volume.
+# docker = isolated container using the shared creds volume.
+if [ "$MODE" = "local" ]; then ALLOWED_ENVS="local"; else ALLOWED_ENVS="docker"; fi
 
 # ---- 1. prereqs --------------------------------------------------------------
 step "Checking prerequisites"
-command -v docker >/dev/null 2>&1 || die "docker not found — install Docker Desktop / engine first."
-docker info >/dev/null 2>&1 || die "docker is installed but the daemon isn't running — start Docker."
-ok "docker ready"
+if [ "$MODE" = "docker" ]; then
+  command -v docker >/dev/null 2>&1 || die "docker not found — install Docker Desktop / engine first."
+  docker info >/dev/null 2>&1 || die "docker is installed but the daemon isn't running — start Docker."
+  ok "docker ready"
+else
+  ok "local mode — claude runs on the host (docker not required)"
+fi
 
 if command -v node >/dev/null 2>&1; then
   NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
@@ -98,47 +105,63 @@ else
   ok "pinned: $VERSION"
 fi
 
-# ---- 3. sandbox image --------------------------------------------------------
-step "Pulling the session sandbox image"
-IMAGE="$SANDBOX_REPO:$VERSION"
-if ! docker manifest inspect "$IMAGE" >/dev/null 2>&1; then
-  warn "$IMAGE not found on the registry — falling back to :latest"
-  IMAGE="$SANDBOX_REPO:latest"
-fi
-docker pull "$IMAGE" >/dev/null && ok "pulled $IMAGE"
-docker tag "$IMAGE" termbridge:dev && ok "tagged as termbridge:dev (re-tag fixes any stale local termbridge:dev)"
-
-# Smoke the image once (this RUNS the container) so we know a session will actually work.
-SMOKE_OK="false"
-if docker run --rm termbridge:dev sh -lc 'command -v claude && command -v gh && command -v git' >/dev/null 2>&1; then
-  SMOKE_OK="true"; ok "image OK — claude + gh + git present (so in-container PRs work)"
+# ---- 3. sandbox image (docker mode only) -------------------------------------
+SMOKE_OK="skip"
+if [ "$MODE" = "local" ]; then
+  step "Session image"
+  ok "local mode — skipped (claude runs on the host; no sandbox image needed)"
 else
-  warn "image missing claude/gh/git — in-container PRs need gh; re-pull, or rely on host gh (local mode / fallback)."
-fi
-
-# ---- 4. one-time Claude login ------------------------------------------------
-step "Claude login (creds shared by every session)"
-mkdir -p "$TERMBRIDGE_HOME"
-if [ -f "$TERMBRIDGE_HOME/.claude/.credentials.json" ]; then
-  ok "already logged in ($TERMBRIDGE_HOME)"
-elif [ "$SKIP_LOGIN" = "true" ]; then
-  warn "no creds at $TERMBRIDGE_HOME but --skip-login set — sessions will need login first."
-else
-  # A terminal for the login TUI: stdin directly, or /dev/tty when piped (curl | bash).
-  TTY_IN=""
-  if [ -t 0 ]; then TTY_IN="-"; elif ( : >/dev/tty ) 2>/dev/null; then TTY_IN="/dev/tty"; fi
-  if [ -n "$TTY_IN" ]; then
-    warn "no creds yet — launching the login TUI (pick 'subscription', open URL, paste code, then exit)"
-    if [ "$TTY_IN" = "/dev/tty" ]; then
-      docker run --rm -it -v "$TERMBRIDGE_HOME:/creds" -e HOME=/creds termbridge:dev claude </dev/tty || true
-    else
-      docker run --rm -it -v "$TERMBRIDGE_HOME:/creds" -e HOME=/creds termbridge:dev claude || true
-    fi
-    [ -f "$TERMBRIDGE_HOME/.claude/.credentials.json" ] && ok "logged in" \
-      || warn "login not detected — re-run, or: docker run --rm -it -v $TERMBRIDGE_HOME:/creds -e HOME=/creds termbridge:dev claude"
+  step "Pulling the session sandbox image"
+  IMAGE="$SANDBOX_REPO:$VERSION"
+  if ! docker manifest inspect "$IMAGE" >/dev/null 2>&1; then
+    warn "$IMAGE not found on the registry — falling back to :latest"
+    IMAGE="$SANDBOX_REPO:latest"
+  fi
+  docker pull "$IMAGE" >/dev/null && ok "pulled $IMAGE"
+  docker tag "$IMAGE" termbridge:dev && ok "tagged as termbridge:dev (re-tag fixes any stale local termbridge:dev)"
+  # Smoke the image once (this RUNS the container) so we know a session will actually work.
+  SMOKE_OK="false"
+  if docker run --rm termbridge:dev sh -lc 'command -v claude && command -v gh && command -v git' >/dev/null 2>&1; then
+    SMOKE_OK="true"; ok "image OK — claude + gh + git present (so in-container PRs work)"
   else
-    warn "no terminal available (fully non-interactive) — run login once manually:"
-    printf '      %s\n' "docker run --rm -it -v $TERMBRIDGE_HOME:/creds -e HOME=/creds termbridge:dev claude"
+    warn "image missing claude/gh/git — in-container PRs need gh; re-pull, or rely on host gh."
+  fi
+fi
+
+# ---- 4. Claude auth ----------------------------------------------------------
+if [ "$MODE" = "local" ]; then
+  step "Host Claude (local mode uses your laptop's claude: its login + MCPs like Jira)"
+  if command -v claude >/dev/null 2>&1; then
+    ok "claude on PATH ($(claude --version 2>/dev/null | head -1)) — sessions use your real HOME (~/.claude)"
+    [ -f "$HOME/.claude/.credentials.json" ] && ok "host claude appears logged in" \
+      || warn "couldn't confirm host login — if a session shows a login prompt, run \`claude\` once and sign in."
+  else
+    die "claude not found on PATH — local mode drives your host claude. Install Claude Code, then re-run."
+  fi
+else
+  step "Claude login (creds shared by every docker session)"
+  mkdir -p "$TERMBRIDGE_HOME"
+  if [ -f "$TERMBRIDGE_HOME/.claude/.credentials.json" ]; then
+    ok "already logged in ($TERMBRIDGE_HOME)"
+  elif [ "$SKIP_LOGIN" = "true" ]; then
+    warn "no creds at $TERMBRIDGE_HOME but --skip-login set — sessions will need login first."
+  else
+    # A terminal for the login TUI: stdin directly, or /dev/tty when piped (curl | bash).
+    TTY_IN=""
+    if [ -t 0 ]; then TTY_IN="-"; elif ( : >/dev/tty ) 2>/dev/null; then TTY_IN="/dev/tty"; fi
+    if [ -n "$TTY_IN" ]; then
+      warn "no creds yet — launching the login TUI (pick 'subscription', open URL, paste code, then exit)"
+      if [ "$TTY_IN" = "/dev/tty" ]; then
+        docker run --rm -it -v "$TERMBRIDGE_HOME:/creds" -e HOME=/creds termbridge:dev claude </dev/tty || true
+      else
+        docker run --rm -it -v "$TERMBRIDGE_HOME:/creds" -e HOME=/creds termbridge:dev claude || true
+      fi
+      [ -f "$TERMBRIDGE_HOME/.claude/.credentials.json" ] && ok "logged in" \
+        || warn "login not detected — re-run, or: docker run --rm -it -v $TERMBRIDGE_HOME:/creds -e HOME=/creds termbridge:dev claude"
+    else
+      warn "no terminal available (fully non-interactive) — run login once manually:"
+      printf '      %s\n' "docker run --rm -it -v $TERMBRIDGE_HOME:/creds -e HOME=/creds termbridge:dev claude"
+    fi
   fi
 fi
 
@@ -146,8 +169,12 @@ fi
 # `npx -y @termbridge/mcp-server`, and the skill from a raw URL.
 
 # ---- 5. register MCP + skill in Hermes ---------------------------------------
-ENV_PAIRS=( "TERMBRIDGE_HOME=$TERMBRIDGE_HOME" "TERMBRIDGE_TMUX_SOCKET=termbridge" \
+ENV_PAIRS=( "TERMBRIDGE_TMUX_SOCKET=termbridge" \
             "TERMBRIDGE_ALLOWED_ENVS=$ALLOWED_ENVS" "TERMBRIDGE_MAX_SESSIONS=$MAX_SESSIONS" )
+# local mode = host-native: do NOT set TERMBRIDGE_HOME, so sessions inherit your REAL HOME
+# (your claude install + login + MCPs). Setting it would point HOME at the bare creds volume
+# and the host claude couldn't find its install. docker mode needs the shared creds volume.
+[ "$MODE" != "local" ] && ENV_PAIRS+=( "TERMBRIDGE_HOME=$TERMBRIDGE_HOME" )
 [ -n "$GH_TOKEN_ARG" ] && ENV_PAIRS+=( "GH_TOKEN=$GH_TOKEN_ARG" )
 
 if [ "$HAS_HERMES" = "true" ]; then
@@ -195,9 +222,15 @@ fi
 # ---- 7. authentication summary — what the user still needs -------------------
 authline() { printf '  %-24s %s\n' "$1" "$2"; }
 step "Authentication — what you need"
-# Claude subscription (this is what the whole thing bills against).
-if [ -f "$TERMBRIDGE_HOME/.claude/.credentials.json" ]; then
-  authline "Claude (subscription)" "${G}✓ logged in${N}  — required; every session reuses these creds"
+# Claude auth (what the whole thing bills against).
+if [ "$MODE" = "local" ]; then
+  if [ -f "$HOME/.claude/.credentials.json" ]; then
+    authline "Claude (host login)" "${G}✓ logged in${N}  — local sessions use your real ~/.claude (login + MCPs)"
+  else
+    authline "Claude (host login)" "${Y}! confirm${N} — run \`claude\` once on this host if a session shows a login prompt"
+  fi
+elif [ -f "$TERMBRIDGE_HOME/.claude/.credentials.json" ]; then
+  authline "Claude (subscription)" "${G}✓ logged in${N}  — every docker session reuses these creds"
 else
   authline "Claude (subscription)" "${R}✗ REQUIRED${N} → docker run --rm -it -v $TERMBRIDGE_HOME:/creds -e HOME=/creds termbridge:dev claude"
 fi
@@ -224,8 +257,12 @@ printf '  %s\n' "${D}(termbridge never logs in to GitHub/Jira itself — it pilo
 # ---- 8. recap — what setup did, and what's left for you ----------------------
 printf '\n%s\n' "${B}── Recap ──────────────────────────────────────────────${N}"
 printf '%s\n' "Done by setup:"
-authline "  Docker image" "termbridge:dev ready ($([ "$SMOKE_OK" = "true" ] && printf 'claude+gh+git ✓' || printf 'see warning above'))"
-authline "  Session container" "${D}launched per-session by termbridge at run time — not started now${N}"
+if [ "$MODE" = "local" ]; then
+  authline "  Run target" "${D}host — your laptop's claude on tmux -L termbridge, real HOME (login + MCPs)${N}"
+else
+  authline "  Docker image" "termbridge:dev ready ($([ "$SMOKE_OK" = "true" ] && printf 'claude+gh+git ✓' || printf 'see warning above'))"
+  authline "  Session container" "${D}launched per-session by termbridge at run time — not started now${N}"
+fi
 if [ "$HAS_HERMES" = "true" ]; then
   authline "  Hermes MCP" "registered + verified via \`hermes mcp test\` (result above)"
   authline "  Skills" "engineer-loop installed — the only required skill"
