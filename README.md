@@ -390,6 +390,17 @@ spawns no tmux/docker; real-tmux/claude smokes run in Docker.
 - `docs/superpowers/plans/` — per-milestone implementation plans (M1–M6).
 - `docs/integration/` — per-runtime integration guides.
 
+## Sponsor
+
+termbridge is MIT and maintained on nights and weekends. If you or your team use it — especially to run
+fleets of Claude Code sessions in production — please consider sponsoring to keep it maintained and moving:
+
+➜ **[github.com/sponsors/shivang2000](https://github.com/sponsors/shivang2000)**
+
+Sponsorship funds bug fixes, recognizer re-tuning as the Claude Code TUI changes, a real cloud
+`SandboxProvider`, and the streamable-HTTP MCP transport. Companies relying on it in production are
+especially encouraged to sponsor.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
