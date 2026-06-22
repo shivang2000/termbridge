@@ -25,14 +25,14 @@ wait_for_text, close_session). YOU are the loop.
 
 ## Run the loop
 
-1. `open_session` `{ "env": <as requested>, "cmd": "claude --dangerously-skip-permissions", "cwd": "<repo>" }`.
-   The skip-permissions flag is **intentional** — this is an AUTONOMOUS loop, so claude must NOT stop on every
-   edit/command prompt (that makes a 2-file change crawl for 40 min and need babysitting). The isolation
-   boundary is the env: `docker` for untrusted/shared chat; a trusted single-user laptop for `local`. Use the
-   env the operator/user specifies — `"docker"` default, `"local"` when they ask (claude runs on the host's
-   `-L termbridge` tmux; the user's default tmux is never touched). Remember the `id`.
-   (If claude refuses `--dangerously-skip-permissions`, fall back to `cmd: "claude"` and press `Shift+Tab`
-   once after boot to enter auto-accept-edits mode — `send_control` `{ "id", "key": "S-Tab" }`.)
+1. `open_session` `{ "env": <as requested>, "cmd": "claude --permission-mode plan", "cwd": "<repo>" }`.
+   **Start in PLAN mode on purpose:** claude first researches read-only (it can still use read tools like the
+   Jira MCP) and DESIGNS the change, then presents a plan for approval — no edits yet. You approve the plan
+   ONCE (step 5) and that single choice flips it into execution + auto-accept, so it applies the whole change
+   without stopping per edit (no 40-min babysitting). The isolation boundary is the env: `docker` for
+   untrusted/shared chat; a trusted single-user laptop for `local`. Use the env the operator/user specifies —
+   `"docker"` default, `"local"` when they ask (claude runs on the host's `-L termbridge` tmux; the user's
+   default tmux is never touched). Remember the `id`.
 2. `wait_for_idle` `{ "id", "quietMs": 2500, "timeoutMs": 120000 }` to let the TUI boot.
 3. `read_progress` `{ "id" }` (and `read_screen` if unsure). Clear the two boot gates yourself:
    - **Folder-trust** (`awaitingInput`, "Do you trust…"): approve with `send_control` `{ "id", "key": "Enter" }`,
@@ -59,18 +59,16 @@ wait_for_text, close_session). YOU are the loop.
    then `read_progress` `{ "id", "sinceOffset": <last nextOffset> }`.
    - **Post a short digest to the user** each tick: the `phase` + tool/file + the last meaningful line
      (e.g. *"🔧 Write(notes.txt)"*, *"… thinking"*, *"running bun test"*). Keep it to one line.
-   - **Plan-mode → switch to auto once, don't approve forever.** If claude finishes PLANNING and presents a
-     plan asking how to proceed (options like *"1. Yes / 2. … / 3. keep planning"*, or the status shows
-     `plan mode`), approve the *proceed* option (`read_screen` to pick it, usually `send_text` `{ "id",
-     "text": "1", "enter": true }`) **and then turn on auto-accept-edits so it stops prompting per edit:**
-     `send_control` `{ "id", "key": "S-Tab" }` (Shift+Tab cycles normal → **auto-accept edits** → plan;
-     land on auto-accept). Confirm via `read_screen` that the footer shows *"auto-accept edits on"*. After
-     this, claude applies the rest of the implementation WITHOUT per-edit prompts — far faster, no babysitting.
-     (With `--dangerously-skip-permissions` from step 1 there are usually no prompts at all; this is the
-     belt-and-suspenders path for docker / when that flag is off.)
-   - If a stray `awaitingInput` prompt still appears (single edit/command), approve it with `send_control`
-     `{ "id", "key": "Enter" }` — but if you're approving the SAME prompt repeatedly, you're not in
-     auto-accept: do the `S-Tab` above instead of spamming Enter.
+   - **Accept the plan WITH auto-accept (the key step).** When claude finishes planning it presents the plan
+     and asks how to proceed — the menu typically offers *"1. Yes, and auto-accept edits"*, *"2. Yes, and
+     manually approve edits"*, *"3. No, keep planning"*. `read_screen`, then pick the **auto-accept** option
+     (usually `send_text` `{ "id", "text": "1", "enter": true }`). That ONE choice both approves the plan AND
+     switches claude to auto-accept-edits, so it applies the whole implementation WITHOUT per-edit prompts.
+     If the menu has no auto-accept option, send the proceed option then `send_control` `{ "id", "key":
+     "S-Tab" }` to reach auto-accept-edits. Confirm via `read_screen` (footer shows *"auto-accept edits on"*).
+   - Stray command prompts (e.g. running tests / git) may still appear — approve with `send_control` `{ "id",
+     "key": "Enter" }`. But if you're approving the SAME edit prompt repeatedly, you're not in auto-accept —
+     fix it with the auto-accept option / `S-Tab` instead of spamming Enter.
    - When `wait_for_idle` reports `idle: true`, the turn is done — go to step 6.
 6. `read_screen` `{ "id", "scrollback": 200 }`. If it contains a line `TB_LOOP_DONE: PASS` → **done,
    success**. If `TB_LOOP_DONE: FAIL <reason>` → note the reason. Otherwise send a corrective nudge with
