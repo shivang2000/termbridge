@@ -65,6 +65,21 @@ export interface EngineerLoopOptions {
 	elicitAcceptance?: () => Promise<string[]>;
 	/** Optional structured logger. */
 	log?: (m: string) => void;
+	/**
+	 * After acceptance is met, deliver the change: claude creates a branch + commits,
+	 * and (if `gh` is authenticated in the session) pushes + opens a PR. Default false
+	 * (the loop only edits+verifies); the CLI/skill enable it.
+	 */
+	openPr?: boolean;
+	/** Branch to deliver on. Defaults to `tb/<slug of goal>`. */
+	branch?: string;
+	/** Force a draft PR. Otherwise the PR is "ready" only when {@link confirmPr} returns true. */
+	prDraft?: boolean;
+	/**
+	 * Human gate before opening the PR (outward action). Returns true → ready PR;
+	 * false or absent → draft PR. Use it to ask the user in chat / at the CLI.
+	 */
+	confirmPr?: () => Promise<boolean>;
 }
 
 export interface EngineerLoopResult {
@@ -74,6 +89,12 @@ export interface EngineerLoopResult {
 	finalSummary: string;
 	testReport?: string;
 	sessionId: string;
+	/** What delivery produced: a PR, a pushed/committed branch, or nothing. */
+	delivery?: "pr" | "branch" | "none";
+	/** The opened PR URL (when delivery === "pr"). */
+	prUrl?: string;
+	/** The branch claude committed to (for host-side push/PR fallback). */
+	branch?: string;
 }
 
 /** Machine-readable completion marker the engineering prompt instructs claude to print. */
@@ -173,6 +194,44 @@ export function assess(screen: string): AssessResult {
 		return { done: true, pass: false, reason: f[1]?.trim() || undefined };
 	}
 	return { done: false, pass: false };
+}
+
+// --- delivery (branch → commit → push → PR) ---
+const PR_URL_RE = new RegExp(`${LINE_LEAD}TB_PR_URL:[ \\t]*(\\S+)`, "im");
+const BRANCH_RE = new RegExp(`${LINE_LEAD}TB_BRANCH_READY:[ \\t]*(\\S+)`, "im");
+/** Extract the opened PR URL claude printed, if any (anchored, echo-safe). */
+export function parsePrUrl(screen: string): string | undefined {
+	return PR_URL_RE.exec(screen)?.[1];
+}
+/** Extract the committed branch claude printed when it could not push/PR itself. */
+export function parseBranch(screen: string): string | undefined {
+	return BRANCH_RE.exec(screen)?.[1];
+}
+
+/** A safe git branch name derived from the goal (e.g. a ticket title). */
+export function slugify(goal: string): string {
+	const slug = goal
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "")
+		.slice(0, 40)
+		.replace(/-+$/g, "");
+	return slug || "change";
+}
+
+/** Prompt sent AFTER acceptance is met to deliver the change (branch/commit/push/PR). */
+export function buildDeliveryPrompt(branch: string, draft: boolean): string {
+	return [
+		`Deliver the change. Create a git branch \`${branch}\` and commit ALL your changes with a clear message referencing the goal.`,
+		"If git complains about identity, set it first: git config user.email and user.name.",
+		"Then run `gh auth status` to check the GitHub CLI:",
+		"- If it SUCCEEDS: run `gh auth setup-git`, push the branch (`git push -u origin " +
+			branch +
+			"`), open a PR with:",
+		`    gh pr create --fill --head ${branch}${draft ? " --draft" : ""}`,
+		"  and finally print, on its own line with nothing before it: TB_PR_URL: <the pull request url>",
+		`- If gh is NOT available or not authenticated: do NOT push. Print, on its own line: TB_BRANCH_READY: ${branch}`,
+	].join("\n");
 }
 
 // --- minimal result shapes for the tools the loop calls ---
@@ -301,9 +360,72 @@ export async function runEngineerLoop(opts: EngineerLoopOptions): Promise<Engine
 		}
 	}
 
+	// Delivery: after acceptance is met, optionally branch → commit → push → PR.
+	// Opening a PR is an outward action, so it's gated: `confirmPr` true → ready PR,
+	// otherwise (declined / no human / prDraft) → draft. If gh isn't authenticated in
+	// the session, claude only commits a branch and the caller pushes + PRs on the host.
+	let delivery: "pr" | "branch" | "none" = "none";
+	let prUrl: string | undefined;
+	let deliveredBranch: string | undefined;
+	if (met && (opts.openPr ?? false)) {
+		const ready = opts.prDraft ? false : opts.confirmPr ? await opts.confirmPr() : false;
+		const branch = opts.branch ?? `tb/${slugify(task.goal)}`;
+		deliveredBranch = branch;
+		log(`delivering on ${branch} (PR ${ready ? "ready" : "draft"})`);
+		await tools("send_text", { id, text: buildDeliveryPrompt(branch, !ready), enter: true });
+		let ticks = 0;
+		for (;;) {
+			if (ticks++ >= maxTurnTicks) {
+				break;
+			}
+			const idleRes = (await tools("wait_for_idle", {
+				id,
+				quietMs,
+				timeoutMs: cadenceMs,
+			})) as IdleResult;
+			const p = (await tools("read_progress", { id, sinceOffset: offset })) as ProgressResult;
+			offset = p.nextOffset ?? offset;
+			onDigest({
+				round: roundsRun,
+				phase: p.phase ?? null,
+				summary: summarizeProgress(p),
+				idle: !!idleRes.idle,
+			});
+			if (p.awaitingInput || p.phase === "awaiting_input") {
+				await tools("send_control", { id, key: "Enter" });
+				continue;
+			}
+			if (idleRes.idle) {
+				break;
+			}
+		}
+		const { screen } = (await tools("read_screen", { id, scrollback: 300 })) as ScreenResult;
+		prUrl = parsePrUrl(screen);
+		const br = parseBranch(screen);
+		if (br) {
+			deliveredBranch = br;
+		}
+		delivery = prUrl ? "pr" : br ? "branch" : "none";
+	}
+
+	const deliverySummary = prUrl
+		? ` → PR ${prUrl}`
+		: delivery === "branch"
+			? ` → branch ${deliveredBranch} (push + PR on host)`
+			: "";
 	const finalSummary = met
-		? `acceptance met after ${roundsRun} round(s)`
+		? `acceptance met after ${roundsRun} round(s)${deliverySummary}`
 		: `not met after ${roundsRun} round(s)${reason ? ` (claude: ${reason})` : ""}`;
 	log(finalSummary);
-	return { met, rounds: roundsRun, acceptance, finalSummary, testReport: report, sessionId: id };
+	return {
+		met,
+		rounds: roundsRun,
+		acceptance,
+		finalSummary,
+		testReport: report,
+		sessionId: id,
+		delivery,
+		...(prUrl ? { prUrl } : {}),
+		...(deliveredBranch ? { branch: deliveredBranch } : {}),
+	};
 }

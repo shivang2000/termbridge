@@ -141,6 +141,14 @@ export interface SessionManagerOptions {
 	 * not in {@link allowedEnvs}, the first allowed env is used instead.
 	 */
 	defaultEnv?: EnvKind;
+	/**
+	 * Allowlist of host env-var NAMES to forward into each session's environment
+	 * (merged with HOME). Lets a session's `gh`/git authenticate for in-session
+	 * push + PR. Defaults to TERMBRIDGE_FORWARD_ENV (comma-separated) and ALWAYS
+	 * includes `GH_TOKEN` + `GH_HOST` when they are set in the host process.
+	 * Allowlist only — arbitrary host env is never leaked into a session.
+	 */
+	forwardEnv?: string[];
 }
 
 interface Entry {
@@ -220,6 +228,8 @@ export class SessionManager {
 	private readonly allowedEnvs: readonly EnvKind[] | undefined;
 	/** Environment used when `open()` is called without an explicit `env`. */
 	private readonly defaultEnv: EnvKind;
+	/** Host env-var names forwarded into each session (allowlist; incl. GH_TOKEN/GH_HOST). */
+	private readonly forwardEnv: readonly string[];
 
 	private readonly sessions = new Map<string, Entry>();
 	/**
@@ -277,6 +287,31 @@ export class SessionManager {
 			}
 		}
 		this.defaultEnv = defaultEnv;
+
+		// Host env-var names to forward into sessions (allowlist). Explicit option or
+		// TERMBRIDGE_FORWARD_ENV (csv), plus GH_TOKEN/GH_HOST always so in-session
+		// `gh` can push + open a PR. De-duplicated.
+		const fromEnv = (process.env.TERMBRIDGE_FORWARD_ENV ?? "")
+			.split(",")
+			.map((s) => s.trim())
+			.filter(Boolean);
+		this.forwardEnv = [...new Set([...(opts.forwardEnv ?? fromEnv), "GH_TOKEN", "GH_HOST"])];
+	}
+
+	/**
+	 * The env merged into a new session: the shared-creds HOME plus any allowlisted
+	 * host vars (e.g. GH_TOKEN) that are actually set. Returns undefined when empty
+	 * so the session simply inherits the ambient environment.
+	 */
+	private sessionEnv(): Record<string, string> | undefined {
+		const env: Record<string, string> = { ...(this.auth?.homeEnv() ?? {}) };
+		for (const name of this.forwardEnv) {
+			const value = process.env[name];
+			if (value !== undefined && value !== "") {
+				env[name] = value;
+			}
+		}
+		return Object.keys(env).length > 0 ? env : undefined;
 	}
 
 	/**
@@ -322,10 +357,11 @@ export class SessionManager {
 					cmd: opts.cmd,
 					cols: opts.cols ?? 500,
 					rows: opts.rows ?? 40,
-					// Point HOME at the shared credentials volume so claude reads the one
-					// subscription login (delivered as tmux -e / docker -e). Undefined when
-					// no creds volume is configured → session inherits the ambient HOME.
-					env: this.auth?.homeEnv(),
+					// HOME → the shared credentials volume (claude reads the one
+					// subscription login) PLUS allowlisted forwarded vars (e.g. GH_TOKEN
+					// for in-session push/PR), delivered as tmux -e / docker -e. Undefined
+					// when nothing is configured → session inherits the ambient env.
+					env: this.sessionEnv(),
 				});
 			} catch (err) {
 				state = "failed";

@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.0.4 — 2026-06-22
+
+Ticket → PR delivery + a safe local (no-docker) run mode.
+
+- **Delivery:** after acceptance passes, the loop has claude create a branch + commit, then open a PR —
+  in-session via `gh` when a `GH_TOKEN` is forwarded, else the CLI/host opens it with your `gh` auth. PR is
+  **human-gated**: confirm → ready-for-review, otherwise a **draft** (`--pr ask|ready|draft|none`).
+  `runEngineerLoop` returns `{ delivery, prUrl, branch }`.
+- **local mode:** `--env local` runs claude on the host's tmux `-L termbridge` socket (your **default tmux
+  is never touched**) and uses the host's git/gh directly — no bind-mount, no token. `--env docker` stays
+  for isolation.
+- **core:** `SessionManager` forwards an allowlisted set of host env vars into a session (`forwardEnv` /
+  `TERMBRIDGE_FORWARD_ENV`, incl. `GH_TOKEN`/`GH_HOST`) so in-session `gh` can push + PR.
+- **tmux safety:** a guard test locks that every `LocalEnvironment` verb runs on `-L termbridge` (no
+  default-socket escape); operator rule documented (never broad `pkill`/`kill-server`).
+- **sandbox image:** now ships `gh` + a default git identity + `safe.directory '*'` for in-container PRs.
+
 ## v1.0.3 — 2026-06-21
 
 CI/CD: tag-triggered release pipeline (`.github/workflows/release.yml`) publishes the npm packages +

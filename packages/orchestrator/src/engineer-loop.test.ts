@@ -1,11 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import {
 	assess,
+	buildDeliveryPrompt,
 	buildEngineerPrompt,
 	correctivePrompt,
 	DONE_SENTINEL,
 	type EngineerTask,
+	parseBranch,
+	parsePrUrl,
 	runEngineerLoop,
+	slugify,
 	summarizeProgress,
 	type ToolCall,
 } from "./engineer-loop.js";
@@ -245,5 +249,95 @@ describe("engineer-loop pure helpers", () => {
 			events: [{ kind: "claude-activity", data: { tool: "Update", file: "pkg.json" } }],
 		});
 		expect(s).toContain("Update(pkg.json)");
+	});
+});
+
+describe("engineer-loop delivery (branch → commit → push → PR)", () => {
+	// boot + round-1 (PASS) + delivery turn. screens[0]=loop result, screens[1]=delivery result.
+	function deliveryScript(deliveryScreen: string): Script {
+		return {
+			idle: [{ idle: true }, { idle: true }, { idle: true }],
+			progress: [
+				{ phase: "thinking", nextOffset: 1 },
+				{ phase: "idle", nextOffset: 2 },
+				{ phase: "idle", nextOffset: 3 },
+			],
+			screens: [`work\n${DONE_SENTINEL} PASS\n`, deliveryScreen],
+		};
+	}
+
+	test("opens a PR: parses TB_PR_URL → delivery 'pr' + prUrl", async () => {
+		const { tools } = mockTools(deliveryScript("done\nTB_PR_URL: https://github.com/a/b/pull/7\n"));
+		const res = await runEngineerLoop({
+			tools,
+			task: baseTask,
+			openPr: true,
+			confirmPr: async () => true,
+		});
+		expect(res.met).toBe(true);
+		expect(res.delivery).toBe("pr");
+		expect(res.prUrl).toBe("https://github.com/a/b/pull/7");
+		expect(res.branch).toMatch(/^tb\//);
+	});
+
+	test("no gh: parses TB_BRANCH_READY → delivery 'branch' for host fallback", async () => {
+		const { tools } = mockTools(deliveryScript("no gh\nTB_BRANCH_READY: tb/fix-thing\n"));
+		const res = await runEngineerLoop({ tools, task: baseTask, openPr: true });
+		expect(res.delivery).toBe("branch");
+		expect(res.branch).toBe("tb/fix-thing");
+		expect(res.prUrl).toBeUndefined();
+	});
+
+	test("confirmPr gates ready vs draft (the delivery prompt's --draft flag)", async () => {
+		const ready = mockTools(deliveryScript("TB_PR_URL: https://h/p/1"));
+		await runEngineerLoop({
+			tools: ready.tools,
+			task: baseTask,
+			openPr: true,
+			confirmPr: async () => true,
+		});
+		const readyDelivery = sent(ready.calls, "send_text")[1]; // [0]=engineering prompt, [1]=delivery
+		expect(String(readyDelivery?.args.text)).not.toContain("--draft");
+
+		const draft = mockTools(deliveryScript("TB_PR_URL: https://h/p/2"));
+		await runEngineerLoop({ tools: draft.tools, task: baseTask, openPr: true }); // no confirmPr → draft
+		expect(String(sent(draft.calls, "send_text")[1]?.args.text)).toContain("--draft");
+	});
+
+	test("openPr defaults off — no delivery turn (back-compat)", async () => {
+		const { tools, calls } = mockTools({
+			idle: [{ idle: true }],
+			progress: [{ phase: "idle", nextOffset: 1 }],
+			screens: [`${DONE_SENTINEL} PASS`],
+		});
+		const res = await runEngineerLoop({ tools, task: baseTask });
+		expect(res.delivery).toBe("none");
+		expect(sent(calls, "send_text")).toHaveLength(1); // only the engineering prompt
+	});
+});
+
+describe("delivery pure helpers", () => {
+	test("parsePrUrl / parseBranch are anchored (echo-safe)", () => {
+		expect(parsePrUrl("x\nTB_PR_URL: https://h/p/9\n")).toBe("https://h/p/9");
+		expect(parseBranch("y\nTB_BRANCH_READY: tb/x\n")).toBe("tb/x");
+		// the echoed prompt instruction (marker mid-line) must NOT match
+		expect(parsePrUrl("and finally print: TB_PR_URL: <the pull request url>")).toBeUndefined();
+		expect(parseBranch("- else print: TB_BRANCH_READY: <branch>")).toBeUndefined();
+	});
+
+	test("slugify makes a safe branch from a ticket title", () => {
+		expect(slugify("PROJ-123: Fix the upload retry!")).toContain("proj-123");
+		expect(slugify("PROJ-123: Fix the upload retry!")).not.toMatch(/[^a-z0-9-]/);
+		expect(slugify("")).toBe("change");
+	});
+
+	test("buildDeliveryPrompt includes branch, gh steps, and the markers", () => {
+		const p = buildDeliveryPrompt("tb/foo", false);
+		expect(p).toContain("tb/foo");
+		expect(p).toContain("gh pr create --fill");
+		expect(p).not.toContain("--draft");
+		expect(p).toContain("TB_PR_URL:");
+		expect(p).toContain("TB_BRANCH_READY:");
+		expect(buildDeliveryPrompt("tb/foo", true)).toContain("--draft");
 	});
 });

@@ -111,7 +111,7 @@ All of these pilot `claude` on your **subscription** (not metered API), one shar
 | `packages/orchestrator` | Reusable iterate-until-done **engineering loop** (`runEngineerLoop`) over the tool surface — agent-agnostic, consumer-side (D8: not in core) |
 | `packages/claude-code-plugin` | Turnkey Claude Code plugin that registers the termbridge MCP server |
 
-## Status — v1.0.1
+## Status — v1.0.4
 
 **M1–M7 complete; stable.** An agent piloted a real logged-in `claude` TUI through the tool
 surface to edit a bound git repo while a human watched live — subscription auth, no API key. Proven
@@ -282,11 +282,15 @@ bun scripts/engineer.ts \
   --repo /work \
   --goal "PROJ-123: <ticket title> — <paste description>" \
   --accept "<acceptance criterion 1>" --accept "<criterion 2>" \
-  --verify "npm test"
+  --verify "npm test" \
+  --env local --pr ask
 ```
 
 The loop sends claude the ticket, **auto-approves its edits**, runs `--verify` each round, and stops when
-the acceptance criteria pass (or asks you for verification steps if you gave none). Watch it live at
+the acceptance criteria pass (or asks you for verification steps if you gave none). Then it commits a
+branch and **opens a PR** — asking you first (`--pr ask`; `ready`/`draft`/`none` also work). `--env local`
+runs on the host (your default tmux is untouched, uses your `gh`); `--env docker` isolates per session.
+Watch it live at
 `http://127.0.0.1:8787/?session=<id>&token=…` and review the diff in your repo when it finishes.
 
 > No clone? The same loop is the Hermes **`engineer-loop`** skill — DM an agent the ticket and it drives

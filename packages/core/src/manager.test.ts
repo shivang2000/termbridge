@@ -777,3 +777,64 @@ describe("SessionManager env policy (docker-only guard)", () => {
 		}
 	});
 });
+
+describe("SessionManager env forwarding (GH_TOKEN for in-session push/PR)", () => {
+	function mk(forwardEnv?: string[]) {
+		const made = makeEnv();
+		const homeDir = mkdtempSync(join(tmpdir(), "tb-fwd-"));
+		const manager = new SessionManager({
+			envFactory: () => made.env,
+			observerFactory: () => new PtyObserver({ clock: () => 0 }),
+			idGen: () => "fwd",
+			homeDir,
+			...(forwardEnv ? { forwardEnv } : {}),
+		});
+		return { manager, made, homeDir };
+	}
+	function withEnv(name: string, value: string | undefined, fn: () => Promise<void>) {
+		const prev = process.env[name];
+		if (value === undefined) delete process.env[name];
+		else process.env[name] = value;
+		return fn().finally(() => {
+			if (prev === undefined) delete process.env[name];
+			else process.env[name] = prev;
+		});
+	}
+
+	test("forwards GH_TOKEN into the session env (alongside HOME) when set", async () => {
+		await withEnv("GH_TOKEN", "tok-123", async () => {
+			const { manager, made, homeDir } = mk();
+			await manager.open();
+			expect(made.ensured[0]?.env).toMatchObject({ HOME: homeDir, GH_TOKEN: "tok-123" });
+		});
+	});
+
+	test("omits GH_TOKEN when it is not set in the host env", async () => {
+		await withEnv("GH_TOKEN", undefined, async () => {
+			const { manager, made, homeDir } = mk();
+			await manager.open();
+			expect((made.ensured[0]?.env as Record<string, string>)?.GH_TOKEN).toBeUndefined();
+			expect(made.ensured[0]?.env).toMatchObject({ HOME: homeDir });
+		});
+	});
+
+	test("never forwards a non-allowlisted host var", async () => {
+		await withEnv("TB_SECRET_X", "leak", async () => {
+			const { manager, made } = mk();
+			await manager.open();
+			expect((made.ensured[0]?.env as Record<string, string>)?.TB_SECRET_X).toBeUndefined();
+		});
+	});
+
+	test("explicit forwardEnv option forwards a named var (and GH_TOKEN stays implicit)", async () => {
+		await withEnv("MY_FWD", "yes", async () => {
+			await withEnv("GH_TOKEN", "tok", async () => {
+				const { manager, made } = mk(["MY_FWD"]);
+				await manager.open();
+				const env = made.ensured[0]?.env as Record<string, string>;
+				expect(env.MY_FWD).toBe("yes");
+				expect(env.GH_TOKEN).toBe("tok");
+			});
+		});
+	});
+});

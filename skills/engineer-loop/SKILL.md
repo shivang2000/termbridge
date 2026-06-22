@@ -49,11 +49,21 @@ wait_for_text, close_session). YOU are the loop.
    success**. If `TB_LOOP_DONE: FAIL <reason>` → note the reason. Otherwise send a corrective nudge with
    `send_text` ("You haven't printed the completion marker; finish, run the verification, then print
    `TB_LOOP_DONE: PASS`") and repeat from step 5.
-7. Stop after **at most ~6 rounds**. Then post a final summary to the user (what changed + the
-   verification result), and `close_session` `{ "id" }`.
+7. **Deliver (after PASS).** Create a git branch `tb/<slug>` and commit the changes (set
+   `git config user.email/name` if git complains). Then **ASK the user in chat: "Verified on `tb/<slug>` —
+   open a PR?"**
+   - On **yes**: if the session has `gh` authenticated (a `GH_TOKEN` was forwarded), run `gh auth setup-git`,
+     push, and `gh pr create --fill --head tb/<slug>` (ready-for-review). Otherwise the branch is committed —
+     push it + `gh pr create` yourself on the host (you have `gh`). Post the PR link back to the channel.
+   - If the user does NOT answer (or you cannot ask): open it as a **draft** (`--draft`). Never silently skip.
+8. Stop after **at most ~6 rounds**. Post a final summary (what changed + verification + PR link), then
+   `close_session` `{ "id" }`.
 
 ## Rules
-- **Docker only.** Never open a `local`/host session from here.
+- **Mode.** Default to `env: "docker"` for untrusted/shared chat (isolated container). On a trusted
+  single-user machine the operator may allow `env: "local"` — claude then runs on the host's tmux
+  `-L termbridge` socket (the user's **default tmux is never touched**) and uses the host's git/gh directly,
+  which is the simplest path (no bind-mount, no token). Use whichever the deployment permits.
 - **Approve to keep moving.** Auto-approve claude's edit/command permission prompts (Enter) — that is
   the point of the autonomous loop. (The sandbox is the container.)
 - **Cadence.** Aim for a progress update every ~25s. You act in turns, so use the `wait_for_idle`
