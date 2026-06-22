@@ -59,8 +59,18 @@ wait_for_text, close_session). YOU are the loop.
    then `read_progress` `{ "id", "sinceOffset": <last nextOffset> }`.
    - **Post a short digest to the user** each tick: the `phase` + tool/file + the last meaningful line
      (e.g. *"🔧 Write(notes.txt)"*, *"… thinking"*, *"running bun test"*). Keep it to one line.
-   - If `awaitingInput` is true (claude is asking to make an edit / run a command), **approve it**:
-     `send_control` `{ "id", "key": "Enter" }`.
+   - **Plan-mode → switch to auto once, don't approve forever.** If claude finishes PLANNING and presents a
+     plan asking how to proceed (options like *"1. Yes / 2. … / 3. keep planning"*, or the status shows
+     `plan mode`), approve the *proceed* option (`read_screen` to pick it, usually `send_text` `{ "id",
+     "text": "1", "enter": true }`) **and then turn on auto-accept-edits so it stops prompting per edit:**
+     `send_control` `{ "id", "key": "S-Tab" }` (Shift+Tab cycles normal → **auto-accept edits** → plan;
+     land on auto-accept). Confirm via `read_screen` that the footer shows *"auto-accept edits on"*. After
+     this, claude applies the rest of the implementation WITHOUT per-edit prompts — far faster, no babysitting.
+     (With `--dangerously-skip-permissions` from step 1 there are usually no prompts at all; this is the
+     belt-and-suspenders path for docker / when that flag is off.)
+   - If a stray `awaitingInput` prompt still appears (single edit/command), approve it with `send_control`
+     `{ "id", "key": "Enter" }` — but if you're approving the SAME prompt repeatedly, you're not in
+     auto-accept: do the `S-Tab` above instead of spamming Enter.
    - When `wait_for_idle` reports `idle: true`, the turn is done — go to step 6.
 6. `read_screen` `{ "id", "scrollback": 200 }`. If it contains a line `TB_LOOP_DONE: PASS` → **done,
    success**. If `TB_LOOP_DONE: FAIL <reason>` → note the reason. Otherwise send a corrective nudge with
