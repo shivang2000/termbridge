@@ -18,8 +18,10 @@ Claude. This works with any MCP-capable agent — Hermes is the worked example.
 ## Install — one command (recommended)
 
 `setup.sh` checks prereqs + versions, pulls the sandbox image (resolving the **current** version from npm,
-so it never goes stale), logs you in to Claude once, registers the MCP server + the `engineer-loop` skill in
-Hermes, and verifies. Idempotent — safe to re-run.
+so it never goes stale) and smoke-tests it, logs you in to Claude **inline** (works even via `curl | bash`),
+clones the termbridge source to `~/.termbridge/src` (for the CLI + smokes; `--no-clone` to skip), registers
+the MCP server + the `engineer-loop` skill in Hermes, and verifies with `hermes mcp test`. Idempotent — safe
+to re-run. No manual `git clone` needed.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/shivang2000/termbridge/main/scripts/setup.sh | bash
