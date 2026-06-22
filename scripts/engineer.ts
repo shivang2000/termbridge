@@ -1,23 +1,26 @@
-// Hand off a coding task (e.g. a Jira ticket) to a running termbridge server's
-// engineering loop. The server must already be up AND logged in to Claude (open
-// <server>/login?token=… once — see the README). Streams progress to stdout.
+// Hand off a coding task (e.g. a Jira ticket) to termbridge's engineering loop.
 //
-//   bun scripts/engineer.ts \
-//     --server http://127.0.0.1:8787 --token SECRET \
-//     --repo /work \
-//     --goal "PROJ-123: add retry to the upload client — see ticket body" \
-//     --accept "uploads retry 3x on 5xx" --accept "the test suite passes" \
-//     --verify "npm test" \
-//     [--env local|docker] [--rounds 6] [--cadence 25000] \
-//     [--pr ask|ready|draft|none] [--branch tb/foo] [--base main]
+// ZERO-INFRA (default): omit --server → the CLI runs the session IN-PROCESS (no
+// server, no port, no token). Watch progress on stdout.
+//   bun scripts/engineer.ts --repo ~/dev/portal \
+//     --goal "PROJ-123: <title> — <body>" --accept "<criteria>" \
+//     --verify "npm test" --env local --pr ask
 //
-// --env defaults to "local" (host tmux -L termbridge; uses your host git/gh).
-//   Use "--env docker" for an isolated per-session container.
-// --pr defaults to "ask" (prompt before opening; non-TTY → draft). After acceptance,
-//   claude commits a branch; it opens the PR in-session if gh is authed (GH_TOKEN),
-//   else this CLI pushes + opens it from the host (your gh auth — no token needed).
+// CLIENT: pass --server <url> (and --token) to drive a RUNNING server instead, so a
+// browser can watch the same session.
+//
+// Login once to the shared creds volume (TERMBRIDGE_HOME, or open <server>/login).
+// --env  local (host tmux -L termbridge + host git/gh; default) | docker (isolated container).
+// --pr   ask (prompt; non-TTY → draft) | ready | draft | none.  [--branch tb/foo] [--base main]
+// After acceptance, claude commits a branch; the PR is opened in-session if gh is
+// authed (GH_TOKEN), else the host's gh (git push + gh pr create — no token needed).
 
 import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import { join } from "node:path";
+import { SessionManager } from "../packages/core/src/index.ts";
+import { createToolSpecs } from "../packages/mcp-server/src/index.ts";
 import { runEngineerLoop, type ToolCall } from "../packages/orchestrator/src/index.ts";
 
 function flags(argv: string[]): {
@@ -39,7 +42,7 @@ function flags(argv: string[]): {
 }
 
 const { single, multi } = flags(process.argv.slice(2));
-const server = (single.server ?? "http://127.0.0.1:8787").replace(/\/$/, "");
+const serverUrl = single.server ? single.server.replace(/\/$/, "") : undefined;
 const token = single.token ?? process.env.TERMBRIDGE_TOKEN ?? "";
 const repo = single.repo ?? "/work";
 const goal = single.goal ?? "";
@@ -61,19 +64,38 @@ if (!goal) {
 	process.exit(2);
 }
 
-// A ToolCall that POSTs to the server's HTTP tool API (unwraps { ok, data }).
-const tools: ToolCall = async (name, args) => {
-	const res = await fetch(`${server}/api/tool/${name}?token=${encodeURIComponent(token)}`, {
-		method: "POST",
-		headers: { "content-type": "application/json" },
-		body: JSON.stringify(args),
-	});
-	const j = (await res.json()) as { ok: boolean; data?: unknown; error?: string };
-	if (!j.ok) throw new Error(`${name}: ${j.error ?? res.status}`);
-	return j.data;
-};
+// Build the tool caller. CLIENT (--server): POST to a running server so a browser
+// can watch. ZERO-INFRA (default): drive an in-process SessionManager — no server,
+// no port, no token. forwardEnv (GH_TOKEN) + creds HOME come from the host env.
+let tools: ToolCall;
+let inproc: { mgr: SessionManager; pipeDir: string } | undefined;
+if (serverUrl) {
+	tools = async (name, args) => {
+		const res = await fetch(`${serverUrl}/api/tool/${name}?token=${encodeURIComponent(token)}`, {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify(args),
+		});
+		const j = (await res.json()) as { ok: boolean; data?: unknown; error?: string };
+		if (!j.ok) throw new Error(`${name}: ${j.error ?? res.status}`);
+		return j.data;
+	};
+} else {
+	const home = process.env.TERMBRIDGE_HOME ?? join(homedir(), ".termbridge", "home");
+	const pipeDir = mkdtempSync(join(tmpdir(), "tb-engineer-"));
+	const mgr = new SessionManager({ maxSessions: 1, pipeDir, homeDir: home });
+	const byName = new Map(createToolSpecs(mgr).map((s) => [s.name, s]));
+	tools = async (name, args) => {
+		const spec = byName.get(name);
+		if (!spec) throw new Error(`unknown tool: ${name}`);
+		return spec.handler(args);
+	};
+	inproc = { mgr, pipeDir };
+}
 
-console.log(`[engineer] ${server} · repo=${repo} · env=${env} · pr=${prMode}`);
+console.log(
+	`[engineer] ${serverUrl ?? "in-process (zero-infra)"} · repo=${repo} · env=${env} · pr=${prMode}`,
+);
 if (env === "local") {
 	console.log(
 		"[engineer] local mode: sessions run on tmux -L termbridge — your default tmux is untouched",
@@ -143,5 +165,12 @@ if (result.prUrl) {
 	}
 }
 
-console.log(`[engineer] watch/inspect: ${server}/?session=${result.sessionId}&token=${token}`);
+if (serverUrl) {
+	console.log(`[engineer] watch/inspect: ${serverUrl}/?session=${result.sessionId}&token=${token}`);
+}
+// Zero-infra: tear down the in-process session + temp pipe dir.
+if (inproc) {
+	await inproc.mgr.close(result.sessionId).catch(() => {});
+	rmSync(inproc.pipeDir, { recursive: true, force: true });
+}
 process.exitCode = result.met ? 0 : 1;

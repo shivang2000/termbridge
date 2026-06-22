@@ -274,17 +274,20 @@ docker run --rm -p 127.0.0.1:8787:8787 \
 `http://127.0.0.1:8787/login?token=choose-a-secret`, click the **Sign in** card, authorize, paste the
 code back. Saved to the creds volume; reused forever.
 
-**3 · Hand off the ticket.** From a checkout of this repo, give the loop the ticket as the task:
+**3 · Hand off the ticket.** From a checkout of this repo — **zero-infra** (no server to start), it runs the
+session in-process:
 
 ```bash
 bun scripts/engineer.ts \
-  --server http://127.0.0.1:8787 --token choose-a-secret \
-  --repo /work \
+  --repo ~/dev/portal \
   --goal "PROJ-123: <ticket title> — <paste description>" \
   --accept "<acceptance criterion 1>" --accept "<criterion 2>" \
   --verify "npm test" \
   --env local --pr ask
 ```
+
+(Add `--server http://127.0.0.1:8787 --token <t>` to drive a running server instead, so you can watch in the
+browser.)
 
 The loop sends claude the ticket, **auto-approves its edits**, runs `--verify` each round, and stops when
 the acceptance criteria pass (or asks you for verification steps if you gave none). Then it commits a
