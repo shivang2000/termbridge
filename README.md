@@ -55,9 +55,13 @@ built (walkthrough below). *Fetching* the ticket from Jira is the agent's job �
 tool/MCP; termbridge pilots Claude, it doesn't pull from Jira. Run it today with no Jira tool by pasting
 the ticket text into `scripts/engineer.ts`.
 
-➜ **Set up Hermes for this flow** (install the MCP server + skill, log in, then chat a ticket):
-**[docs/integration/hermes.md](docs/integration/hermes.md)**. Live-demo runbook (pre-flight → run → talking
-points → reset): **[docs/demo/hermes-demo.md](docs/demo/hermes-demo.md)**.
+➜ **Set up Hermes for this flow** — one command (checks versions, pulls the sandbox, logs in, registers the
+MCP server + skill, verifies):
+```bash
+curl -fsSL https://raw.githubusercontent.com/shivang2000/termbridge/main/scripts/setup.sh | bash
+```
+Details + manual steps: **[docs/integration/hermes.md](docs/integration/hermes.md)**. Live-demo runbook
+(pre-flight → run → talking points → reset): **[docs/demo/hermes-demo.md](docs/demo/hermes-demo.md)**.
 
 ## Ways to use it
 

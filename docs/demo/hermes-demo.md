@@ -12,7 +12,8 @@ your existing `git`/`gh`) — simplest + most reliable on stage. Docker mode not
 
 ## Pre-flight checklist (do this ~10 min before)
 
-- [ ] **claude logged in** (subscription) into the creds volume. One-time:
+- [ ] **claude logged in** (subscription) into the creds volume. **`setup.sh` (§1A) does this for you**; or
+  one-time by hand:
   ```bash
   mkdir -p ~/.termbridge/home
   docker run --rm -it -v ~/.termbridge/home:/creds -e HOME=/creds shivang2000/termbridge-sandbox:latest claude
@@ -27,20 +28,33 @@ your existing `git`/`gh`) — simplest + most reliable on stage. Docker mode not
 
 ---
 
-## 1. Set up termbridge in Hermes (one-time)
+## 1. Set up termbridge in Hermes (one-time) — pick one
+
+### A. Automated (recommended) — `setup.sh`
+
+One command. It checks prereqs + versions, pulls the right sandbox image (current version resolved from
+npm — never stale), logs you in to Claude, registers the MCP server + the `engineer-loop` skill, and
+verifies. Idempotent. For this demo, allow local mode:
 
 ```bash
-# MCP server — no clone, runs from npm:
+curl -fsSL https://raw.githubusercontent.com/shivang2000/termbridge/main/scripts/setup.sh | bash -s -- --mode local
+```
+
+It does **not** restart your gateway (a restart kills running agents) — it prints the `hermes gateway
+restart` to run yourself once, before the demo. `--help` lists flags (`--mode docker`, `--max-sessions`,
+`--gh-token`, `--restart`). After it finishes, skip to §2.
+
+### B. Manual (simple, explicit)
+
+```bash
 hermes mcp add termbridge \
   --env TERMBRIDGE_HOME="$HOME/.termbridge/home" TERMBRIDGE_TMUX_SOCKET=termbridge \
         TERMBRIDGE_ALLOWED_ENVS=local,docker TERMBRIDGE_MAX_SESSIONS=2 \
   --command npx --args -y @termbridge/mcp-server
 
-# the engineer-loop skill (from the public repo):
 hermes skills install \
   https://raw.githubusercontent.com/shivang2000/termbridge/main/skills/engineer-loop/SKILL.md --yes
 
-# verify + apply:
 hermes mcp test termbridge      # → ✓ Connected, 13 tools
 hermes gateway restart          # ⚠️ kills running agents — do it BEFORE the demo, not during
 ```

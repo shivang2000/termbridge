@@ -15,7 +15,31 @@ Claude. This works with any MCP-capable agent — Hermes is the worked example.
 
 ---
 
-## Install (one-time)
+## Install — one command (recommended)
+
+`setup.sh` checks prereqs + versions, pulls the sandbox image (resolving the **current** version from npm,
+so it never goes stale), logs you in to Claude once, registers the MCP server + the `engineer-loop` skill in
+Hermes, and verifies. Idempotent — safe to re-run.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/shivang2000/termbridge/main/scripts/setup.sh | bash
+```
+
+Common variations:
+```bash
+# trusted laptop (host tmux -L termbridge + host git/gh; no token needed):
+curl -fsSL …/scripts/setup.sh | bash -s -- --mode local
+# in-container PRs (forward a token), tighter cap, restart now:
+GH_TOKEN=ghp_xxx curl -fsSL …/scripts/setup.sh | bash -s -- --max-sessions 2 --restart
+```
+It will **not** restart your gateway unless you pass `--restart` (a restart kills running agents). When it
+finishes it prints the exact `hermes gateway restart` to run when idle. `--help` lists every flag.
+
+Then jump to [Use it](#use-it-in-chat). The manual steps below are what the script automates.
+
+---
+
+## Install — manual (one-time)
 
 **Prereqs on the host:** `node` ≥ 20 (for `npx`) or `bun`, `docker`, a Claude subscription. No clone
 needed — the MCP server comes from npm and the session sandbox from Docker Hub.
@@ -23,8 +47,8 @@ needed — the MCP server comes from npm and the session sandbox from Docker Hub
 ### 1. Get the per-session sandbox image (no clone needed)
 Each session runs `claude` inside this image; tag it as the default `termbridge:dev`:
 ```bash
-docker pull shivang2000/termbridge-sandbox:1.0.2
-docker tag  shivang2000/termbridge-sandbox:1.0.2 termbridge:dev
+docker pull shivang2000/termbridge-sandbox:1.0.4
+docker tag  shivang2000/termbridge-sandbox:1.0.4 termbridge:dev
 ```
 
 ### 2. Log in to Claude once (creds persist + are shared by every session)
@@ -87,7 +111,7 @@ the live browser view (the unified server) and **type to take over** at any poin
   `human_took_over`.
 - **The same loop without a clone / without chat:** `@termbridge/orchestrator`'s `runEngineerLoop`, or the
   CLI `scripts/engineer.ts` against a running server — see the README "Walkthrough".
-- **Published on npm:** `@termbridge/core`, `@termbridge/mcp-server`, `@termbridge/orchestrator` (≥ 1.0.2).
+- **Published on npm:** `@termbridge/core`, `@termbridge/mcp-server`, `@termbridge/orchestrator` (latest: 1.0.4).
   The MCP server runs via `npx -y @termbridge/mcp-server` (no clone). To build your own loop, depend on
   `@termbridge/orchestrator`.
 - **Safety/limits:** keep `TERMBRIDGE_ALLOWED_ENVS=docker` and a low `TERMBRIDGE_MAX_SESSIONS`.
