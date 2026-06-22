@@ -25,9 +25,14 @@ wait_for_text, close_session). YOU are the loop.
 
 ## Run the loop
 
-1. `open_session` `{ "env": <as requested>, "cmd": "claude", "cwd": "<repo>" }`. Use the env the
-   operator/user specifies — `"docker"` by default (isolated), `"local"` when they ask (claude runs on the
-   host's `-L termbridge` tmux; the user's default tmux is never touched). Remember the `id`.
+1. `open_session` `{ "env": <as requested>, "cmd": "claude --dangerously-skip-permissions", "cwd": "<repo>" }`.
+   The skip-permissions flag is **intentional** — this is an AUTONOMOUS loop, so claude must NOT stop on every
+   edit/command prompt (that makes a 2-file change crawl for 40 min and need babysitting). The isolation
+   boundary is the env: `docker` for untrusted/shared chat; a trusted single-user laptop for `local`. Use the
+   env the operator/user specifies — `"docker"` default, `"local"` when they ask (claude runs on the host's
+   `-L termbridge` tmux; the user's default tmux is never touched). Remember the `id`.
+   (If claude refuses `--dangerously-skip-permissions`, fall back to `cmd: "claude"` and press `Shift+Tab`
+   once after boot to enter auto-accept-edits mode — `send_control` `{ "id", "key": "S-Tab" }`.)
 2. `wait_for_idle` `{ "id", "quietMs": 2500, "timeoutMs": 120000 }` to let the TUI boot.
 3. `read_progress` `{ "id" }` (and `read_screen` if unsure). Clear the two boot gates yourself:
    - **Folder-trust** (`awaitingInput`, "Do you trust…"): approve with `send_control` `{ "id", "key": "Enter" }`,
