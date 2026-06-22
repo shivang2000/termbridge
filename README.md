@@ -56,7 +56,8 @@ tool/MCP; termbridge pilots Claude, it doesn't pull from Jira. Run it today with
 the ticket text into `scripts/engineer.ts`.
 
 ➜ **Set up Hermes for this flow** (install the MCP server + skill, log in, then chat a ticket):
-**[docs/integration/hermes.md](docs/integration/hermes.md)**.
+**[docs/integration/hermes.md](docs/integration/hermes.md)**. Live-demo runbook (pre-flight → run → talking
+points → reset): **[docs/demo/hermes-demo.md](docs/demo/hermes-demo.md)**.
 
 ## Ways to use it
 
