@@ -61,13 +61,20 @@ wait_for_text, close_session). YOU are the loop.
    success**. If `TB_LOOP_DONE: FAIL <reason>` → note the reason. Otherwise send a corrective nudge with
    `send_text` ("You haven't printed the completion marker; finish, run the verification, then print
    `TB_LOOP_DONE: PASS`") and repeat from step 5.
-7. **Deliver (after PASS).** Create a git branch `tb/<slug>` and commit the changes (set
-   `git config user.email/name` if git complains). Then **ASK the user in chat: "Verified on `tb/<slug>` —
-   open a PR?"**
-   - On **yes**: if the session has `gh` authenticated (a `GH_TOKEN` was forwarded), run `gh auth setup-git`,
-     push, and `gh pr create --fill --head tb/<slug>` (ready-for-review). Otherwise the branch is committed —
-     push it + `gh pr create` yourself on the host (you have `gh`). Post the PR link back to the channel.
-   - If the user does NOT answer (or you cannot ask): open it as a **draft** (`--draft`). Never silently skip.
+7. **Deliver (after PASS) — do it IN THE SESSION, never with your own host gh.** Drive Claude with
+   `send_text` to run the whole delivery inside the termbridge session:
+   `git checkout -b tb/<slug> && git add -A && git commit -m "<msg>" && gh auth setup-git && git push -u
+   origin tb/<slug> && gh pr create --fill --head tb/<slug>`, then have it print the PR URL on its own line
+   prefixed `TB_PR_URL:`. (Set `git config user.email/name` first if git complains.)
+   - **Why in-session:** local mode forwards your host gh token as `GH_TOKEN` INTO the session, so gh is
+     authenticated there. Your OWN host/terminal gh is often **keyring-only** — a gateway-spawned gh can't
+     read the macOS keyring and fails with *"gh auth not available / invalid token."* So do NOT run gh from
+     your host tools; run it inside the session where `GH_TOKEN` is set.
+   - Read the screen, parse `TB_PR_URL:`, post the link. Honor the user's ask-first-vs-auto-open preference
+     (the task said auto-open → don't prompt; otherwise ask, and open a `--draft` if they don't answer).
+   - **If gh genuinely isn't available in the session** (no `GH_TOKEN`): the branch is committed — tell the
+     user to run `git push -u origin tb/<slug> && gh pr create --fill` in THEIR OWN terminal (keyring works
+     there). Never silently skip.
 8. Stop after **at most ~6 rounds**. Post a final summary (what changed + verification + PR link), then
    `close_session` `{ "id" }`.
 
