@@ -12,8 +12,8 @@ your existing `git`/`gh`) — simplest + most reliable on stage. Docker mode not
 
 ## Pre-flight checklist (do this ~10 min before)
 
-- [ ] **claude logged in** (subscription) into the creds volume. **`setup.sh` (§1A) does this for you**; or
-  one-time by hand:
+- [ ] **claude logged in** (subscription). **`setup.sh` (§1A) does this inline** — even under `curl | bash`.
+  Manual fallback if you skip the script:
   ```bash
   mkdir -p ~/.termbridge/home
   docker run --rm -it -v ~/.termbridge/home:/creds -e HOME=/creds shivang2000/termbridge-sandbox:latest claude
@@ -32,17 +32,23 @@ your existing `git`/`gh`) — simplest + most reliable on stage. Docker mode not
 
 ### A. Automated (recommended) — `setup.sh`
 
-One command. It checks prereqs + versions, pulls the right sandbox image (current version resolved from
-npm — never stale), logs you in to Claude, registers the MCP server + the `engineer-loop` skill, and
-verifies. Idempotent. For this demo, allow local mode:
+One self-contained command: checks prereqs + versions, pulls + smoke-tests the sandbox image (current
+version resolved from npm — never stale), **logs you in to Claude inline** (works even via `curl | bash`),
+self-clones the source to `~/.termbridge/src`, registers the MCP server + the `engineer-loop` skill, and
+runs `hermes mcp test`. Idempotent. For this demo, allow local mode:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/shivang2000/termbridge/main/scripts/setup.sh | bash -s -- --mode local
 ```
 
-It does **not** restart your gateway (a restart kills running agents) — it prints the `hermes gateway
-restart` to run yourself once, before the demo. `--help` lists flags (`--mode docker`, `--max-sessions`,
-`--gh-token`, `--restart`). After it finishes, skip to §2.
+Then the one thing it won't do for you (a restart **kills running agents**, so it stays manual):
+
+```bash
+hermes gateway restart
+```
+
+`--help` lists flags (`--mode docker`, `--max-sessions`, `--gh-token`, `--no-clone`, `--restart`). After the
+restart, skip to §2.
 
 ### B. Manual (simple, explicit)
 
