@@ -179,18 +179,28 @@ ENV_PAIRS=( "TERMBRIDGE_TMUX_SOCKET=termbridge" \
 
 if [ "$HAS_HERMES" = "true" ]; then
   step "Registering termbridge in Hermes (mode: $MODE · allowed envs: $ALLOWED_ENVS)"
-  # Re-register on re-run so the requested mode/env always applies (a stale docker-only
-  # registration would otherwise reject env:local). hermes' remove verb varies — try
-  # the common forms, all best-effort, then add.
+  # Re-register on re-run so the requested mode/env always applies (a stale registration
+  # with TERMBRIDGE_HOME would otherwise break env:local). Discover hermes' remove verb
+  # (it varies by version) from `hermes mcp --help`, fall back to trying each.
   if hermes mcp list 2>/dev/null | grep -qw termbridge; then
     warn "termbridge already registered — re-registering to apply mode=$MODE (allowed: $ALLOWED_ENVS)"
-    hermes mcp remove termbridge >/dev/null 2>&1 \
-      || hermes mcp delete termbridge >/dev/null 2>&1 \
-      || hermes mcp rm termbridge >/dev/null 2>&1 || true
+    RMVERB=""
+    for v in remove delete rm unregister; do
+      if hermes mcp --help 2>&1 | grep -qiw "$v"; then RMVERB="$v"; break; fi
+    done
+    if [ -n "$RMVERB" ]; then
+      hermes mcp "$RMVERB" termbridge >/dev/null 2>&1 || true
+    else
+      hermes mcp remove termbridge >/dev/null 2>&1 \
+        || hermes mcp delete termbridge >/dev/null 2>&1 \
+        || hermes mcp rm termbridge >/dev/null 2>&1 || true
+    fi
+    hermes mcp list 2>/dev/null | grep -qw termbridge \
+      && warn "couldn't auto-remove the old registration — if env looks stale, run \`hermes mcp <remove|delete> termbridge\` then re-run setup"
   fi
   hermes mcp add termbridge --env "${ENV_PAIRS[@]}" --command npx --args -y @termbridge/mcp-server \
     && ok "MCP server registered (mode=$MODE, envs=$ALLOWED_ENVS)" \
-    || warn "hermes mcp add failed — run: hermes mcp remove termbridge, then re-run setup."
+    || warn "hermes mcp add failed — remove termbridge manually, then re-run setup."
   step "Installing the engineer-loop skill"
   hermes skills install "$SKILL_URL" --yes >/dev/null 2>&1 && ok "skill installed" \
     || warn "skill install failed — run: hermes skills install $SKILL_URL --yes"
