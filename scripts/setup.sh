@@ -182,30 +182,37 @@ if [ "$HAS_HERMES" = "true" ]; then
   # Re-register on re-run so the requested mode/env always applies (a stale registration
   # with TERMBRIDGE_HOME would otherwise break env:local). Discover hermes' remove verb
   # (it varies by version) from `hermes mcp --help`, fall back to trying each.
-  if hermes mcp list 2>/dev/null | grep -qw termbridge; then
+  # NOTE: all reads use </dev/null so they don't drain the `curl | bash` pipe and leave
+  # the interactive `mcp add` prompt in a bad state (that cancelled the add on re-runs).
+  if hermes mcp list </dev/null 2>/dev/null | grep -qw termbridge; then
     warn "termbridge already registered — re-registering to apply mode=$MODE (allowed: $ALLOWED_ENVS)"
     RMVERB=""
     for v in remove delete rm unregister; do
-      if hermes mcp --help 2>&1 | grep -qiw "$v"; then RMVERB="$v"; break; fi
+      if hermes mcp --help </dev/null 2>&1 | grep -qiw "$v"; then RMVERB="$v"; break; fi
     done
     if [ -n "$RMVERB" ]; then
-      hermes mcp "$RMVERB" termbridge >/dev/null 2>&1 || true
+      hermes mcp "$RMVERB" termbridge </dev/null >/dev/null 2>&1 || true
     else
-      hermes mcp remove termbridge >/dev/null 2>&1 \
-        || hermes mcp delete termbridge >/dev/null 2>&1 \
-        || hermes mcp rm termbridge >/dev/null 2>&1 || true
+      hermes mcp remove termbridge </dev/null >/dev/null 2>&1 \
+        || hermes mcp delete termbridge </dev/null >/dev/null 2>&1 \
+        || hermes mcp rm termbridge </dev/null >/dev/null 2>&1 || true
     fi
-    hermes mcp list 2>/dev/null | grep -qw termbridge \
-      && warn "couldn't auto-remove the old registration — if env looks stale, run \`hermes mcp <remove|delete> termbridge\` then re-run setup"
   fi
-  hermes mcp add termbridge --env "${ENV_PAIRS[@]}" --command npx --args -y @termbridge/mcp-server \
-    && ok "MCP server registered (mode=$MODE, envs=$ALLOWED_ENVS)" \
-    || warn "hermes mcp add failed — remove termbridge manually, then re-run setup."
+  # `mcp add` prompts "Enable all 13 tools? [Y/n/select]" — answer it non-interactively
+  # (feeding "y"), then VERIFY via `mcp list` rather than trusting the prompt's exit code.
+  printf 'y\ny\n' | hermes mcp add termbridge --env "${ENV_PAIRS[@]}" \
+    --command npx --args -y @termbridge/mcp-server >/dev/null 2>&1 || true
+  if hermes mcp list </dev/null 2>/dev/null | grep -qw termbridge; then
+    ok "MCP server registered (mode=$MODE, envs=$ALLOWED_ENVS)"
+  else
+    warn "termbridge did not register — run manually:"
+    printf '      %s\n' "hermes mcp add termbridge --env ${ENV_PAIRS[*]} --command npx --args -y @termbridge/mcp-server"
+  fi
   step "Installing the engineer-loop skill"
-  hermes skills install "$SKILL_URL" --yes >/dev/null 2>&1 && ok "skill installed" \
+  hermes skills install "$SKILL_URL" --yes </dev/null >/dev/null 2>&1 && ok "skill installed" \
     || warn "skill install failed — run: hermes skills install $SKILL_URL --yes"
   step "Verifying the MCP connection"
-  hermes mcp test termbridge || warn "mcp test reported an issue — check creds + that npx can resolve the package."
+  hermes mcp test termbridge </dev/null || warn "mcp test reported an issue — check that npx can resolve the package."
 else
   step "Manual Hermes steps (CLI not found)"
   printf '  Once hermes is installed, run:\n'
