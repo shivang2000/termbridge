@@ -16,6 +16,9 @@
 #   --version X.Y.Z         pin a version (default: latest on npm, else 1.0.4)
 #   --max-sessions N        concurrency cap (default 3)
 #   --gh-token TOKEN        forward GH_TOKEN into sessions (in-container PRs); or set GH_TOKEN in env
+#   --api-key KEY           auth the session via ANTHROPIC_API_KEY (or set ANTHROPIC_API_KEY in env).
+#                           RELIABLE on macOS local mode: the subscription login lives in the Keychain,
+#                           which a gateway-spawned claude can't read; an API key avoids that. (Metered.)
 #   --skip-login            don't run the one-time Claude login (assume creds already present)
 #   --restart               run `hermes gateway restart` at the end (⚠️ kills running agents)
 #   -h | --help
@@ -27,6 +30,7 @@ MODE="docker"
 VERSION=""
 MAX_SESSIONS="3"
 GH_TOKEN_ARG="${GH_TOKEN:-}"
+API_KEY="${ANTHROPIC_API_KEY:-}"
 SKIP_LOGIN="false"
 DO_RESTART="false"
 TERMBRIDGE_HOME="${TERMBRIDGE_HOME:-$HOME/.termbridge/home}"
@@ -39,6 +43,8 @@ step() { printf '%s\n' "${B}==>${N} $*"; }
 ok()   { printf '%s\n' "  ${G}✓${N} $*"; }
 warn() { printf '%s\n' "  ${Y}!${N} $*"; }
 die()  { printf '%s\n' "  ${R}✗ $*${N}" >&2; exit 1; }
+# Mask secrets when echoing an env KEY=VALUE pair.
+mask_kv() { case "$1" in GH_TOKEN=*) echo "GH_TOKEN=***";; ANTHROPIC_API_KEY=*) echo "ANTHROPIC_API_KEY=***";; *) echo "$1";; esac; }
 
 # ---- args --------------------------------------------------------------------
 while [ $# -gt 0 ]; do
@@ -47,6 +53,7 @@ while [ $# -gt 0 ]; do
     --version)      VERSION="${2:-}"; shift 2 ;;
     --max-sessions) MAX_SESSIONS="${2:-}"; shift 2 ;;
     --gh-token)     GH_TOKEN_ARG="${2:-}"; shift 2 ;;
+    --api-key)      API_KEY="${2:-}"; shift 2 ;;
     --skip-login)   SKIP_LOGIN="true"; shift ;;
     --restart)      DO_RESTART="true"; shift ;;
     -h|--help)      awk 'NR>1 && /^#/{sub(/^# ?/,"");print;next} NR>1{exit}' "$0"; exit 0 ;;
@@ -131,12 +138,16 @@ fi
 # ---- 4. Claude auth ----------------------------------------------------------
 if [ "$MODE" = "local" ]; then
   step "Host Claude (local mode uses your laptop's claude: its login + MCPs like Jira)"
-  if command -v claude >/dev/null 2>&1; then
-    ok "claude on PATH ($(claude --version 2>/dev/null | head -1)) — sessions use your real HOME (~/.claude)"
-    [ -f "$HOME/.claude/.credentials.json" ] && ok "host claude appears logged in" \
-      || warn "couldn't confirm host login — if a session shows a login prompt, run \`claude\` once and sign in."
+  command -v claude >/dev/null 2>&1 \
+    || die "claude not found on PATH — local mode drives your host claude. Install Claude Code, then re-run."
+  ok "claude on PATH ($(claude --version 2>/dev/null | head -1)) — sessions use your real HOME (~/.claude; your MCPs load)"
+  if [ -n "$API_KEY" ]; then
+    ok "auth: ANTHROPIC_API_KEY (forwarded into the session — no Keychain needed)"
+  elif [ -f "$HOME/.claude/.credentials.json" ]; then
+    ok "auth: host file-creds present (~/.claude/.credentials.json) — readable by a gateway-spawned claude"
   else
-    die "claude not found on PATH — local mode drives your host claude. Install Claude Code, then re-run."
+    warn "auth: no ANTHROPIC_API_KEY and no ~/.claude/.credentials.json file."
+    [ "$(uname)" = "Darwin" ] && warn "macOS: your subscription login is likely in the KEYCHAIN, which a gateway-spawned claude CANNOT read → sessions show 'Not logged in'. Fix: re-run with --api-key sk-ant-… (reliable), or start \`hermes gateway\` from your foreground terminal so it inherits Keychain access."
   fi
 else
   step "Claude login (creds shared by every docker session)"
@@ -176,6 +187,9 @@ ENV_PAIRS=( "TERMBRIDGE_TMUX_SOCKET=termbridge" \
 # and the host claude couldn't find its install. docker mode needs the shared creds volume.
 [ "$MODE" != "local" ] && ENV_PAIRS+=( "TERMBRIDGE_HOME=$TERMBRIDGE_HOME" )
 [ -n "$GH_TOKEN_ARG" ] && ENV_PAIRS+=( "GH_TOKEN=$GH_TOKEN_ARG" )
+# API-key auth (forwarded into the session). On macOS local mode this is the reliable path:
+# the subscription login is in the Keychain, which a gateway-spawned claude can't read.
+[ -n "$API_KEY" ] && ENV_PAIRS+=( "TERMBRIDGE_FORWARD_ENV=ANTHROPIC_API_KEY" "ANTHROPIC_API_KEY=$API_KEY" )
 
 if [ "$HAS_HERMES" = "true" ]; then
   step "Registering termbridge in Hermes (mode: $MODE · allowed envs: $ALLOWED_ENVS)"
@@ -206,7 +220,8 @@ if [ "$HAS_HERMES" = "true" ]; then
     ok "MCP server registered (mode=$MODE, envs=$ALLOWED_ENVS)"
   else
     warn "termbridge did not register — run manually:"
-    printf '      %s\n' "hermes mcp add termbridge --env ${ENV_PAIRS[*]} --command npx --args -y @termbridge/mcp-server"
+    MASKED=""; for kv in "${ENV_PAIRS[@]}"; do MASKED="$MASKED $(mask_kv "$kv")"; done
+    printf '      %s\n' "hermes mcp add termbridge --env$MASKED --command npx --args -y @termbridge/mcp-server"
   fi
   step "Installing the engineer-loop skill"
   hermes skills install "$SKILL_URL" --yes </dev/null >/dev/null 2>&1 && ok "skill installed" \
@@ -217,10 +232,7 @@ else
   step "Manual Hermes steps (CLI not found)"
   printf '  Once hermes is installed, run:\n'
   printf '    hermes mcp add termbridge \\\n'
-  for kv in "${ENV_PAIRS[@]}"; do
-    case "$kv" in GH_TOKEN=*) printf '      --env %s \\\n' "GH_TOKEN=***" ;; \
-                  *)          printf '      --env %s \\\n' "$kv" ;; esac
-  done
+  for kv in "${ENV_PAIRS[@]}"; do printf '      --env %s \\\n' "$(mask_kv "$kv")"; done
   printf '      --command npx --args -y @termbridge/mcp-server\n'
   printf '    hermes skills install %s --yes\n' "$SKILL_URL"
 fi
