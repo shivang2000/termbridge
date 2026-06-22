@@ -106,7 +106,15 @@ if ! docker manifest inspect "$IMAGE" >/dev/null 2>&1; then
   IMAGE="$SANDBOX_REPO:latest"
 fi
 docker pull "$IMAGE" >/dev/null && ok "pulled $IMAGE"
-docker tag "$IMAGE" termbridge:dev && ok "tagged as termbridge:dev"
+docker tag "$IMAGE" termbridge:dev && ok "tagged as termbridge:dev (re-tag fixes any stale local termbridge:dev)"
+
+# Smoke the image once (this RUNS the container) so we know a session will actually work.
+SMOKE_OK="false"
+if docker run --rm termbridge:dev sh -lc 'command -v claude && command -v gh && command -v git' >/dev/null 2>&1; then
+  SMOKE_OK="true"; ok "image OK — claude + gh + git present (so in-container PRs work)"
+else
+  warn "image missing claude/gh/git — in-container PRs need gh; re-pull, or rely on host gh (local mode / fallback)."
+fi
 
 # ---- 4. one-time Claude login ------------------------------------------------
 step "Claude login (creds shared by every session)"
@@ -157,14 +165,14 @@ else
   printf '    hermes skills install %s --yes\n' "$SKILL_URL"
 fi
 
-# ---- 6. gateway restart (gated) ---------------------------------------------
-step "Apply"
+# ---- 6. gateway restart (gated — the user does this, but we make it loud) -----
+RESTART_PENDING="false"
 if [ "$HAS_HERMES" = "true" ]; then
+  step "Apply"
   if [ "$DO_RESTART" = "true" ]; then
     warn "restarting the gateway (kills running agents)…"; hermes gateway restart && ok "gateway restarted"
   else
-    warn "run this to pick up the changes (it ${B}kills running agents${N}${Y}, so do it when idle):${N}"
-    printf '      %s\n' "hermes gateway restart"
+    RESTART_PENDING="true"   # surfaced loudly in the recap below
   fi
 fi
 
@@ -197,6 +205,28 @@ fi
 authline "Jira / tracker" "${D}optional — authenticate your tracker tool IN HERMES so it can fetch tickets; else paste the ticket text${N}"
 printf '  %s\n' "${D}(termbridge never logs in to GitHub/Jira itself — it pilots Claude; the host/agent handle those.)${N}"
 
+# ---- 8. recap — what setup did, and what's left for you ----------------------
+printf '\n%s\n' "${B}── Recap ──────────────────────────────────────────────${N}"
+printf '%s\n' "Done by setup:"
+authline "  Docker image" "termbridge:dev ready ($([ "$SMOKE_OK" = "true" ] && printf 'claude+gh+git ✓' || printf 'see warning above'))"
+authline "  Session container" "${D}launched per-session by termbridge at run time — not started now${N}"
+if [ "$HAS_HERMES" = "true" ]; then
+  authline "  Hermes MCP" "registered + verified via \`hermes mcp test\` (result above)"
+  authline "  Skills" "engineer-loop installed — the only required skill"
+else
+  authline "  Hermes" "${Y}CLI not found${N} — MCP + skill steps printed above for you to run"
+fi
+
+printf '\n%s\n' "Your turn:"
+[ -f "$TERMBRIDGE_HOME/.claude/.credentials.json" ] || \
+  printf '  %s\n' "${R}• Log in to Claude${N} (command in the Authentication section above) — required"
+if [ "$RESTART_PENDING" = "true" ]; then
+  printf '  %s\n' "${Y}${B}• ACTION REQUIRED:${N}${Y} restart the gateway to load the MCP server + skill —${N}"
+  printf '  %s\n' "${Y}    it ${B}kills running agents${N}${Y}, so run it when idle:${N}"
+  printf '      %s\n' "hermes gateway restart"
+fi
+printf '  %s\n' "• Clone the target repo locally (where the session can reach it)"
+
 printf '\n%s\n' "${G}${B}termbridge ready.${N}  mode=$MODE · version=$VERSION · max_sessions=$MAX_SESSIONS"
-printf '%s\n' "Next: clone the target repo locally, then DM the bot, e.g.:"
+printf '%s\n' "Then DM the bot, e.g.:"
 printf '  %s\n' "${B}@bot use the engineer-loop skill (env: $MODE): ship PROJ-123 in <repo>, verify with <cmd>, open a PR${N}"
