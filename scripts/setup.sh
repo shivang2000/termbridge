@@ -17,7 +17,6 @@
 #   --max-sessions N        concurrency cap (default 3)
 #   --gh-token TOKEN        forward GH_TOKEN into sessions (in-container PRs); or set GH_TOKEN in env
 #   --skip-login            don't run the one-time Claude login (assume creds already present)
-#   --no-clone              don't clone the termbridge source (CLI/smokes) to ~/.termbridge/src
 #   --restart               run `hermes gateway restart` at the end (⚠️ kills running agents)
 #   -h | --help
 set -euo pipefail
@@ -29,11 +28,8 @@ VERSION=""
 MAX_SESSIONS="3"
 GH_TOKEN_ARG="${GH_TOKEN:-}"
 SKIP_LOGIN="false"
-NO_CLONE="false"
 DO_RESTART="false"
 TERMBRIDGE_HOME="${TERMBRIDGE_HOME:-$HOME/.termbridge/home}"
-SRC_DIR="${TERMBRIDGE_SRC:-$HOME/.termbridge/src}"
-REPO_URL="https://github.com/shivang2000/termbridge.git"
 SKILL_URL="https://raw.githubusercontent.com/shivang2000/termbridge/main/skills/engineer-loop/SKILL.md"
 SANDBOX_REPO="shivang2000/termbridge-sandbox"
 
@@ -52,7 +48,6 @@ while [ $# -gt 0 ]; do
     --max-sessions) MAX_SESSIONS="${2:-}"; shift 2 ;;
     --gh-token)     GH_TOKEN_ARG="${2:-}"; shift 2 ;;
     --skip-login)   SKIP_LOGIN="true"; shift ;;
-    --no-clone)     NO_CLONE="true"; shift ;;
     --restart)      DO_RESTART="true"; shift ;;
     -h|--help)      awk 'NR>1 && /^#/{sub(/^# ?/,"");print;next} NR>1{exit}' "$0"; exit 0 ;;
     *)              die "unknown flag: $1 (try --help)" ;;
@@ -147,26 +142,8 @@ else
   fi
 fi
 
-# ---- 4b. termbridge source (so users never clone by hand) --------------------
-# Not needed for the chat flow (MCP runs via npx, skill via raw URL) — it's a
-# convenience so the CLI (scripts/engineer.ts) + smokes are on hand.
-CLONED_TO=""
-if [ "$NO_CLONE" = "true" ]; then
-  :
-elif [ -f scripts/setup.sh ] && [ -f package.json ]; then
-  ok "already inside a termbridge checkout — skipping source clone"
-elif ! command -v git >/dev/null 2>&1; then
-  warn "git not found — skipping source clone (not required for the chat flow)."
-elif [ -d "$SRC_DIR/.git" ]; then
-  ok "termbridge source already at $SRC_DIR"; CLONED_TO="$SRC_DIR"
-else
-  step "Cloning termbridge source → $SRC_DIR (CLI + smokes)"
-  if git clone --depth 1 "$REPO_URL" "$SRC_DIR" >/dev/null 2>&1; then
-    ok "cloned to $SRC_DIR"; CLONED_TO="$SRC_DIR"
-  else
-    warn "clone failed — not required for the chat flow; the MCP still runs from npx."
-  fi
-fi
+# No clone needed: sessions run from the Docker Hub image, the MCP server from
+# `npx -y @termbridge/mcp-server`, and the skill from a raw URL.
 
 # ---- 5. register MCP + skill in Hermes ---------------------------------------
 ENV_PAIRS=( "TERMBRIDGE_HOME=$TERMBRIDGE_HOME" "TERMBRIDGE_TMUX_SOCKET=termbridge" \
@@ -243,7 +220,6 @@ printf '\n%s\n' "${B}── Recap ───────────────�
 printf '%s\n' "Done by setup:"
 authline "  Docker image" "termbridge:dev ready ($([ "$SMOKE_OK" = "true" ] && printf 'claude+gh+git ✓' || printf 'see warning above'))"
 authline "  Session container" "${D}launched per-session by termbridge at run time — not started now${N}"
-[ -n "$CLONED_TO" ] && authline "  Source (CLI/smokes)" "${D}$CLONED_TO${N}"
 if [ "$HAS_HERMES" = "true" ]; then
   authline "  Hermes MCP" "registered + verified via \`hermes mcp test\` (result above)"
   authline "  Skills" "engineer-loop installed — the only required skill"

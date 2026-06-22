@@ -34,8 +34,8 @@ your existing `git`/`gh`) — simplest + most reliable on stage. Docker mode not
 
 One self-contained command: checks prereqs + versions, pulls + smoke-tests the sandbox image (current
 version resolved from npm — never stale), **logs you in to Claude inline** (works even via `curl | bash`),
-self-clones the source to `~/.termbridge/src`, registers the MCP server + the `engineer-loop` skill, and
-runs `hermes mcp test`. Idempotent. For this demo, allow local mode:
+registers the MCP server + the `engineer-loop` skill, and runs `hermes mcp test`. No `git clone` — the image
+comes from Docker Hub, the MCP from `npx`. Idempotent. For this demo, allow local mode:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/shivang2000/termbridge/main/scripts/setup.sh | bash -s -- --mode local
@@ -47,8 +47,8 @@ Then the one thing it won't do for you (a restart **kills running agents**, so i
 hermes gateway restart
 ```
 
-`--help` lists flags (`--mode docker`, `--max-sessions`, `--gh-token`, `--no-clone`, `--restart`). After the
-restart, skip to §2.
+`--help` lists flags (`--mode docker`, `--max-sessions`, `--gh-token`, `--restart`). After the restart, skip
+to §2.
 
 ### B. Manual (simple, explicit)
 
