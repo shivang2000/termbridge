@@ -158,4 +158,11 @@ export interface OpenSessionOptions {
 	cmd?: string;
 	cols?: number;
 	rows?: number;
+	/**
+	 * Auto-answer the session's routine permission prompts (claude-permission
+	 * tool/trust/bypass) in-session, so a driving agent that only polls
+	 * occasionally never leaves the TUI stuck. Login (oauth/paste) is never
+	 * auto-answered. A human takeover pauses it (the WriteLock gate). Default off.
+	 */
+	autoApprove?: boolean;
 }

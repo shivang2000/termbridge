@@ -40,7 +40,10 @@ export function createToolSpecs(manager: SessionManager): ToolSpec[] {
 			name: "open_session",
 			description:
 				"Open a new interactive terminal session (tmux substrate) and return its id. " +
-				"env selects the execution backend (local or docker).",
+				"env selects the execution backend (local or docker). Set autoApprove:true to have " +
+				"termbridge auto-answer the session's routine permission prompts in-session (so a driving " +
+				"agent that polls only occasionally never leaves Claude stuck); login is never auto-answered " +
+				"and a human takeover pauses it.",
 			inputSchema: {
 				name: optStr,
 				env: z.enum(["local", "docker"]).optional(),
@@ -50,6 +53,7 @@ export function createToolSpecs(manager: SessionManager): ToolSpec[] {
 				cmd: optStr,
 				cols: posInt,
 				rows: posInt,
+				autoApprove: z.boolean().optional(),
 			},
 			handler: async (args) => {
 				const s = await manager.open({
@@ -61,6 +65,7 @@ export function createToolSpecs(manager: SessionManager): ToolSpec[] {
 					cmd: args.cmd,
 					cols: args.cols,
 					rows: args.rows,
+					autoApprove: args.autoApprove,
 				});
 				// Report the ACTUAL backend the manager selected — an env policy may
 				// coerce an omitted env (e.g. to docker), so don't echo the request.

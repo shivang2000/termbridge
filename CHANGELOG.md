@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.0.5 — 2026-06-23
+
+In-session **auto-approver** — Claude never stalls on permission prompts.
+
+- **`open_session({ autoApprove: true })`** (or `TERMBRIDGE_AUTO_APPROVE=1`): termbridge answers the
+  session's routine `claude-permission` prompts (tool / trust / bypass) **in-session**, via the existing
+  PtyObserver stream + recognizer `suggestedKeys` + the WriteLock-gated `sendControl`. So a driving agent
+  (e.g. Hermes) that only polls occasionally never leaves the TUI stuck waiting for input.
+- **Human-takeover-aware + login-safe by construction:** the approve key goes through the agent write gate,
+  so a human keystroke pauses auto-approve; and login (`paste`/oauth → empty `suggestedKeys`) is never
+  auto-answered. Off by default (opt-in), so existing behavior is unchanged.
+- skill: the `engineer-loop` opens with `autoApprove: true` (paired with `--permission-mode plan` →
+  plan-first, then hands-off execution).
+
 ## v1.0.4 — 2026-06-22
 
 Ticket → PR delivery + a safe local (no-docker) run mode.

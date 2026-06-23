@@ -49,11 +49,20 @@ export interface SessionDeps {
 	sleep?: Sleep;
 	/** Poll interval for waitForIdle / waitForText (defaults to 25ms). */
 	pollMs?: number;
+	/**
+	 * When true, auto-answer routine permission prompts in-session (so a driving
+	 * agent that polls only occasionally never leaves the TUI stuck). Login is
+	 * never auto-answered; a human takeover pauses it via the WriteLock. Default off.
+	 */
+	autoApprove?: boolean;
+	/** Settle delay before an auto-approve check fires after output (default 200ms). */
+	autoApproveSettleMs?: number;
 }
 
 const DEFAULT_POLL_MS = 25;
 const DEFAULT_IDLE_QUIET_MS = 400;
 const DEFAULT_TIMEOUT_MS = 30_000;
+const DEFAULT_AUTO_APPROVE_SETTLE_MS = 200;
 
 const realSleep: Sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -71,6 +80,14 @@ export class Session {
 	/** Events queued for the next readEvents() — human_took_over, needs_login, … */
 	private pendingEvents: RecognizedEvent[] = [];
 
+	// --- auto-approve state (only used when deps.autoApprove) ---
+	private readonly autoApproveSettleMs: number;
+	private autoApproveUnsub: (() => void) | undefined;
+	private autoApproveScheduled = false;
+	/** Signature of the prompt instance we last auto-answered; cleared when the prompt clears. */
+	private lastApprovedSig: string | null = null;
+	private closed = false;
+
 	constructor(deps: SessionDeps) {
 		this.id = deps.id ?? deps.name;
 		this.name = deps.name;
@@ -81,6 +98,10 @@ export class Session {
 		this.clock = deps.clock ?? Date.now;
 		this.sleep = deps.sleep ?? realSleep;
 		this.pollMs = deps.pollMs ?? DEFAULT_POLL_MS;
+		this.autoApproveSettleMs = deps.autoApproveSettleMs ?? DEFAULT_AUTO_APPROVE_SETTLE_MS;
+		if (deps.autoApprove) {
+			this.startAutoApprove();
+		}
 	}
 
 	/**
@@ -240,8 +261,67 @@ export class Session {
 
 	/** Stop observing and tear down the underlying tmux session. */
 	async close(): Promise<void> {
+		this.closed = true;
+		this.autoApproveUnsub?.();
+		this.autoApproveUnsub = undefined;
 		this.observer.stop();
 		await this.env.destroySession(this.name);
+	}
+
+	// --- auto-approve -------------------------------------------------------
+	// Answer the TUI's routine permission prompts in-session so a driving agent
+	// that polls only occasionally never leaves Claude stuck. Subscribes to the
+	// live pane stream; on a settled burst it recognizes a claude-permission
+	// prompt and sends the recognizer's suggested key — but ONLY through the
+	// WriteLock-gated sendControl, so a human takeover pauses it for free, and
+	// login (paste/oauth → empty suggestedKeys) is never auto-answered.
+
+	private startAutoApprove(): void {
+		this.autoApproveUnsub = this.observer.onData(() => this.scheduleApproveCheck());
+	}
+
+	/** Coalesce a burst of output into a single settled check (debounce). */
+	private scheduleApproveCheck(): void {
+		if (this.autoApproveScheduled || this.closed) {
+			return;
+		}
+		this.autoApproveScheduled = true;
+		void (async () => {
+			await this.sleep(this.autoApproveSettleMs);
+			this.autoApproveScheduled = false;
+			if (!this.closed) {
+				await this.checkAndApprove().catch(() => {
+					// A transient capture/send failure must not kill the observer loop.
+				});
+			}
+		})();
+	}
+
+	private async checkAndApprove(): Promise<void> {
+		const screen = await this.readScreen();
+		const { data: recentBytes } = this.observer.buffer();
+		const perm = this.pipeline
+			.process(screen, recentBytes)
+			.find((e) => e.kind === "claude-permission" && e.suggestedKeys.length > 0);
+
+		if (!perm) {
+			// Prompt cleared → allow the next (possibly identically-worded) prompt.
+			this.lastApprovedSig = null;
+			return;
+		}
+
+		const question = (perm.data as { question?: string } | undefined)?.question ?? "";
+		const sig = `${perm.kind}:${question}`;
+		if (sig === this.lastApprovedSig) {
+			return; // already answered this on-screen prompt instance
+		}
+
+		// Write-gated: refused while a human is driving → we simply don't mark it,
+		// so the human keeps control and we retry once they release.
+		const res = await this.sendControl(perm.suggestedKeys[0] as string);
+		if (res.ok) {
+			this.lastApprovedSig = sig;
+		}
 	}
 
 	/**

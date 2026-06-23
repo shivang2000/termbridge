@@ -25,14 +25,16 @@ wait_for_text, close_session). YOU are the loop.
 
 ## Run the loop
 
-1. `open_session` `{ "env": <as requested>, "cmd": "claude --permission-mode plan", "cwd": "<repo>" }`.
+1. `open_session` `{ "env": <as requested>, "cmd": "claude --permission-mode plan", "cwd": "<repo>",
+   "autoApprove": true }`.
    **Start in PLAN mode on purpose:** claude first researches read-only (it can still use read tools like the
    Jira MCP) and DESIGNS the change, then presents a plan for approval — no edits yet. You approve the plan
-   ONCE (step 5) and that single choice flips it into execution + auto-accept, so it applies the whole change
-   without stopping per edit (no 40-min babysitting). The isolation boundary is the env: `docker` for
-   untrusted/shared chat; a trusted single-user laptop for `local`. Use the env the operator/user specifies —
-   `"docker"` default, `"local"` when they ask (claude runs on the host's `-L termbridge` tmux; the user's
-   default tmux is never touched). Remember the `id`.
+   ONCE (step 5) and that single choice flips it into execution. **`autoApprove: true`** then has *termbridge
+   itself* answer the routine per-edit/per-command permission prompts in-session — so Claude never sits stuck
+   waiting for you between polls (and a human takeover still pauses it; login is never auto-answered). The
+   isolation boundary is the env: `docker` for untrusted/shared chat; a trusted single-user laptop for
+   `local`. Use the env the operator/user specifies — `"docker"` default, `"local"` when they ask (claude
+   runs on the host's `-L termbridge` tmux; the user's default tmux is never touched). Remember the `id`.
 2. `wait_for_idle` `{ "id", "quietMs": 2500, "timeoutMs": 120000 }` to let the TUI boot.
 3. `read_progress` `{ "id" }` (and `read_screen` if unsure). Clear the two boot gates yourself:
    - **Folder-trust** (`awaitingInput`, "Do you trust…"): approve with `send_control` `{ "id", "key": "Enter" }`,

@@ -149,6 +149,11 @@ export interface SessionManagerOptions {
 	 * Allowlist only — arbitrary host env is never leaked into a session.
 	 */
 	forwardEnv?: string[];
+	/**
+	 * Default for in-session auto-approve when `open()` doesn't pass `autoApprove`.
+	 * Falls back to `TERMBRIDGE_AUTO_APPROVE` (1/true/yes/on). Default off.
+	 */
+	autoApprove?: boolean;
 }
 
 interface Entry {
@@ -230,6 +235,8 @@ export class SessionManager {
 	private readonly defaultEnv: EnvKind;
 	/** Host env-var names forwarded into each session (allowlist; incl. GH_TOKEN/GH_HOST). */
 	private readonly forwardEnv: readonly string[];
+	/** Default for per-session auto-approve when `open()` doesn't specify (TERMBRIDGE_AUTO_APPROVE). */
+	private readonly autoApproveDefault: boolean;
 
 	private readonly sessions = new Map<string, Entry>();
 	/**
@@ -296,6 +303,10 @@ export class SessionManager {
 			.map((s) => s.trim())
 			.filter(Boolean);
 		this.forwardEnv = [...new Set([...(opts.forwardEnv ?? fromEnv), "GH_TOKEN", "GH_HOST"])];
+
+		// In-session auto-approve default: explicit option wins, else TERMBRIDGE_AUTO_APPROVE.
+		this.autoApproveDefault =
+			opts.autoApprove ?? /^(1|true|yes|on)$/i.test(process.env.TERMBRIDGE_AUTO_APPROVE ?? "");
 	}
 
 	/**
@@ -368,7 +379,14 @@ export class SessionManager {
 				throw err;
 			}
 
-			const { session } = await this.buildSession(id, name, kind, env, state);
+			const { session } = await this.buildSession(
+				id,
+				name,
+				kind,
+				env,
+				state,
+				opts.autoApprove ?? this.autoApproveDefault,
+			);
 			return session;
 		} finally {
 			this.reserved--;
@@ -390,6 +408,7 @@ export class SessionManager {
 		kind: EnvKind,
 		env: Environment,
 		state: SessionState,
+		autoApprove: boolean,
 	): Promise<Entry> {
 		// Tap the pane to a per-session temp file so the observer's rolling buffer
 		// captures output even after it scrolls off the visible pane.
@@ -412,6 +431,7 @@ export class SessionManager {
 			observer,
 			pipeline,
 			writeLock: new WriteLock(),
+			autoApprove,
 		});
 
 		// Surface a needs_login event up-front when the shared creds volume has no
@@ -458,7 +478,14 @@ export class SessionManager {
 			if (this.sessions.has(id)) {
 				continue;
 			}
-			const { info } = await this.buildSession(id, name, kind, env, "running");
+			const { info } = await this.buildSession(
+				id,
+				name,
+				kind,
+				env,
+				"running",
+				this.autoApproveDefault,
+			);
 			adopted.push({ ...info });
 		}
 		return adopted;

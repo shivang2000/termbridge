@@ -1,5 +1,6 @@
 import { describe, expect, mock, test } from "bun:test";
 import { PtyObserver } from "../observer/pty-observer.js";
+import { claudePermissionRecognizer } from "../recognizers/claude-permission.js";
 import { RecognizerPipeline } from "../recognizers/pipeline.js";
 import type { Clock, ExecResult, RecognizedEvent } from "../types.js";
 import { Session, type SessionEnvironment } from "./session.js";
@@ -57,6 +58,7 @@ interface BuildOpts {
 	writeLock?: WriteLock;
 	observer?: PtyObserver;
 	pipeline?: RecognizerPipeline;
+	autoApprove?: boolean;
 }
 
 function build(opts: BuildOpts = {}) {
@@ -75,9 +77,15 @@ function build(opts: BuildOpts = {}) {
 		clock,
 		sleep: sleep as unknown as (ms: number) => Promise<void>,
 		pollMs: 5,
+		...(opts.autoApprove ? { autoApprove: true } : {}),
 	});
 	return { session, envh, observer, pipeline, writeLock, sleep };
 }
+
+/** Drain the auto-approve debounce chain (sleep is mocked instant → microtasks + one tick). */
+const flush = () => new Promise((r) => setTimeout(r, 0));
+/** send-keys argv the auto-approver would issue for key `k`. */
+const sendKeys = (k: string) => ["send-keys", "-t", "s1", k];
 
 describe("Session.sendText", () => {
 	test("agent write sends literal text then Enter by default", async () => {
@@ -391,5 +399,73 @@ describe("Session — web bridge surface (M5) ADVERSARIAL", () => {
 		await session.sendText("y");
 		const { events } = await session.readEvents();
 		expect(events.filter((e) => e.kind === "human_took_over")).toHaveLength(1);
+	});
+});
+
+describe("Session auto-approve", () => {
+	const PERM = "Do you want to proceed?\n❯ 1. Yes\n  2. No\n";
+	const permPipeline = () => {
+		const p = new RecognizerPipeline();
+		p.register(claudePermissionRecognizer);
+		return p;
+	};
+	const sends = (calls: string[][]) => calls.filter((c) => c[0] === "send-keys");
+
+	test("auto-answers a routine permission prompt with the recognizer's key", async () => {
+		const { envh, observer } = build({ autoApprove: true, pipeline: permPipeline(), screen: PERM });
+		observer.ingest("…prompt streamed…");
+		await flush();
+		expect(sends(envh.calls)).toEqual([sendKeys("1")]);
+	});
+
+	test("answers each prompt instance once (dedup), re-answers after it clears", async () => {
+		const { envh, observer } = build({ autoApprove: true, pipeline: permPipeline(), screen: PERM });
+		observer.ingest("a");
+		observer.ingest("b"); // same on-screen prompt, coalesced
+		await flush();
+		expect(sends(envh.calls)).toEqual([sendKeys("1")]); // exactly one
+
+		envh.setScreen("…working, no prompt…");
+		observer.ingest("c");
+		await flush(); // prompt cleared → signature reset
+
+		envh.setScreen(PERM);
+		observer.ingest("d");
+		await flush(); // a NEW prompt instance → answered again
+		expect(sends(envh.calls)).toEqual([sendKeys("1"), sendKeys("1")]);
+	});
+
+	test("does NOT act while a human is driving (WriteLock gate)", async () => {
+		const clock = makeClock(0);
+		const writeLock = new WriteLock({ clock: clock.clock });
+		writeLock.noteHumanActivity(); // human owns the lock
+		const { envh, observer } = build({
+			autoApprove: true,
+			pipeline: permPipeline(),
+			screen: PERM,
+			clock: clock.clock,
+			writeLock,
+		});
+		observer.ingest("x");
+		await flush();
+		expect(sends(envh.calls)).toEqual([]); // refused — human keeps control
+	});
+
+	test("never auto-answers login (paste/oauth → no suggested key)", async () => {
+		const { envh, observer } = build({
+			autoApprove: true,
+			pipeline: permPipeline(),
+			screen: "Paste the code here:\n",
+		});
+		observer.ingest("x");
+		await flush();
+		expect(sends(envh.calls)).toEqual([]);
+	});
+
+	test("off by default — does nothing without autoApprove", async () => {
+		const { envh, observer } = build({ pipeline: permPipeline(), screen: PERM });
+		observer.ingest("x");
+		await flush();
+		expect(envh.calls).toEqual([]); // not even a capture-pane
 	});
 });
