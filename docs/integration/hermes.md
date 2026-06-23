@@ -29,11 +29,14 @@ curl -fsSL https://raw.githubusercontent.com/shivang2000/termbridge/main/scripts
 
 Common variations:
 ```bash
-# trusted laptop (host tmux -L termbridge + host git/gh; no token needed):
-curl -fsSL …/scripts/setup.sh | bash -s -- --mode local
-# in-container PRs (forward a token), tighter cap, restart now:
-GH_TOKEN=ghp_xxx curl -fsSL …/scripts/setup.sh | bash -s -- --max-sessions 2 --restart
+# trusted laptop, host-native (claude + Jira MCP + gh from your real ~/.claude / host):
+curl -fsSL …/scripts/setup.sh | bash -s -- --mode local --api-key sk-ant-… --gh-token ghp_…
+# isolated docker container per session:
+curl -fsSL …/scripts/setup.sh | bash -s -- --mode docker
 ```
+**On macOS, local mode needs the two tokens** (`--api-key`, `--gh-token`): Claude's subscription login and
+`gh`'s tokens live in the **Keychain**, which a gateway-spawned process can't read — so pass tokens that
+bypass it. The PAT needs `repo` + `workflow` scope (SSO-authorized for the org).
 It will **not** restart your gateway unless you pass `--restart` (a restart kills running agents). When it
 finishes it prints the exact `hermes gateway restart` to run when idle. `--help` lists every flag.
 
@@ -43,9 +46,9 @@ pilots Claude; the host/agent own those):
 
 | What | Why | How |
 |---|---|---|
-| **Claude (subscription)** | required — everything bills against the plan | `setup.sh` runs the one-time login; or `docker run --rm -it -v $HOME/.termbridge/home:/creds -e HOME=/creds termbridge:dev claude` |
-| **GitHub** | to open the PR at the end of the loop | **local mode:** `gh auth login` on the host. **docker mode:** `--gh-token ghp_xxx` (in-container PR) or host `gh auth login` (host fallback) |
-| **Jira / tracker** | optional — so Hermes can fetch a ticket by id | authenticate your tracker tool **in Hermes**; otherwise paste the ticket text in chat |
+| **Claude** | required — Claude must be authenticated in the session | **local (macOS):** `--api-key sk-ant-…` (the Keychain login isn't readable by a gateway-spawned claude). **docker:** the file-creds volume (`setup.sh` runs the one-time login). |
+| **GitHub** | to open the PR **in-session** | `--gh-token ghp_…` (PAT, `repo`+`workflow`, SSO-authorized) — forwarded into the session. Local mode also auto-forwards `gh auth token`, but a PAT is the reliable path past the Keychain + multi-account mess. |
+| **Jira / tracker** | optional | **the driven Claude fetches the ticket via its own Jira MCP** (local mode = your real `~/.claude`, so your MCPs load). Hermes itself needs no Jira tool. |
 
 Then jump to [Use it](#use-it-in-chat). The manual steps below are what the script automates.
 

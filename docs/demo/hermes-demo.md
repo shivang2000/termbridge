@@ -1,124 +1,105 @@
-# termbridge × Hermes — live demo runbook
+# termbridge × Hermes — live demo runbook (proven)
 
-The pitch (say this first): *"I drop a ticket in chat. An agent opens Claude Code on my subscription, does
-the work in our repo, runs the tests, and opens a PR — and I watch the whole thing stream back in the
-channel. No metered API."*
+The pitch: *"I drop a Jira ticket in chat. An agent opens Claude Code in our repo, **plans** the change,
+implements it, runs the tests, and opens a **PR** — streamed live in the channel."*
 
-This runbook covers **(1) setting up termbridge in Hermes** and **(2) running a live implementation**.
-Hermes itself is assumed installed. Demo uses **local mode** (claude runs on the presenter's laptop, uses
-your existing `git`/`gh`) — simplest + most reliable on stage. Docker mode notes at the end.
+Proven end-to-end on **local mode** (Claude runs on the presenter's laptop with their real `~/.claude` →
+their login + MCPs like Jira, host `git`/`gh`). Docker mode notes at the end.
 
----
-
-## Pre-flight checklist (do this ~10 min before)
-
-- [ ] **claude logged in** (subscription). **`setup.sh` (§1A) does this inline** — even under `curl | bash`.
-  Manual fallback if you skip the script:
-  ```bash
-  mkdir -p ~/.termbridge/home
-  docker run --rm -it -v ~/.termbridge/home:/creds -e HOME=/creds shivang2000/termbridge-sandbox:latest claude
-  # pick "Claude account with subscription", open the URL, paste the code
-  ```
-  (Local mode reads creds from `~/.termbridge/home`; this populates it once.)
-- [ ] **host `gh` authed**: `gh auth status` → logged in (this opens the PR).
-- [ ] **target repo cloned locally** (you have access): `git clone <repo> ~/dev/portal`
-- [ ] **a small, fast ticket** picked, and a **quick verify command** (lint / build / one test file — NOT the
-      whole UI suite). Know the answer so the demo is predictable.
-- [ ] **default tmux is safe** — termbridge only uses `tmux -L termbridge`; your real tmux is never touched.
+> **Run everything on the machine that has the Hermes gateway + the target repo.** `setup.sh`, `hermes …`,
+> and the repo all live there. (Each machine has its own `~/.hermes`; the skill is a local copy.)
 
 ---
 
-## 1. Set up termbridge in Hermes (one-time) — pick one
+## Pre-flight (one-time, ~5 min) — two tokens beat the macOS Keychain
 
-### A. Automated (recommended) — `setup.sh`
+Why tokens: on macOS, Claude's subscription login and `gh`'s tokens live in the **login Keychain**. Your
+interactive terminal can read them, but a **gateway-spawned** Claude/gh (Hermes → tmux) **cannot** → "Not
+logged in" / "gh auth invalid". Passing tokens via env sidesteps the Keychain entirely.
 
-One self-contained command: checks prereqs + versions, pulls + smoke-tests the sandbox image (current
-version resolved from npm — never stale), **logs you in to Claude inline** (works even via `curl | bash`),
-registers the MCP server + the `engineer-loop` skill, and runs `hermes mcp test`. No `git clone` — the image
-comes from Docker Hub, the MCP from `npx`. Idempotent. For this demo, allow local mode:
+- [ ] **Anthropic API key** → console.anthropic.com → `sk-ant-…` (Claude auth; no login dance).
+- [ ] **GitHub PAT** → github.com/settings/tokens → *classic* → scopes **`repo`** + **`workflow`** →
+      **Authorize SSO** for the org → `ghp_…` (opens the PR in-session).
+- [ ] **Target repo cloned** at a known path, deps installed (`npm install`).
+- [ ] **A small, fast ticket** + a **fast verify** (lint / typecheck / one test file — not the whole suite).
+- [ ] **Default tmux is safe** — termbridge only uses `tmux -L termbridge`; your real tmux is never touched.
+
+---
+
+## 1. Set up — one command (also installs the latest skill)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/shivang2000/termbridge/main/scripts/setup.sh | bash -s -- --mode local
+curl -fsSL https://raw.githubusercontent.com/shivang2000/termbridge/main/scripts/setup.sh \
+  | bash -s -- --mode local --api-key sk-ant-YOURKEY --gh-token ghp_YOURPAT
 ```
-
-Then the one thing it won't do for you (a restart **kills running agents**, so it stays manual):
-
+The recap should show `auth: ANTHROPIC_API_KEY …` and `✓ gh token forwarded — in-session PRs`. Then apply
+(a restart **kills running agents**, so do it now while idle):
 ```bash
 hermes gateway restart
 ```
+> `setup.sh` is idempotent — re-running re-registers cleanly. `--mode local` = host-native (no Keychain,
+> no docker image, no creds volume); it forwards the API key + your gh token into each session. `--help`
+> lists flags. The skill install is included — no separate step.
 
-`--help` lists flags (`--mode docker`, `--max-sessions`, `--gh-token`, `--restart`). After the restart, skip
-to §2.
+---
 
-### B. Manual (simple, explicit)
+## 2. The live run
 
-```bash
-hermes mcp add termbridge \
-  --env TERMBRIDGE_HOME="$HOME/.termbridge/home" TERMBRIDGE_TMUX_SOCKET=termbridge \
-        TERMBRIDGE_ALLOWED_ENVS=local,docker TERMBRIDGE_MAX_SESSIONS=2 \
-  --command npx --args -y @termbridge/mcp-server
-
-hermes skills install \
-  https://raw.githubusercontent.com/shivang2000/termbridge/main/skills/engineer-loop/SKILL.md --yes
-
-hermes mcp test termbridge      # → ✓ Connected, 13 tools
-hermes gateway restart          # ⚠️ kills running agents — do it BEFORE the demo, not during
+**Paste to the bot:**
 ```
-
-> `TERMBRIDGE_ALLOWED_ENVS=local,docker` permits local mode on this trusted laptop. For a shared/untrusted
-> bot use `docker` only (see the docker note below). Give Hermes a **Jira tool** if you want it to fetch the
-> ticket by id; otherwise you'll paste the ticket text.
-
----
-
-## 2. The live run (what you type, what the audience sees)
-
-**You (in the channel):**
-> **@bot use the engineer-loop skill (env: local). Ticket PROJ-123: `<paste title + a line of body>`.
-> Repo `~/dev/portal`, work in the developer-portal-UI app. Verify with `<your verify cmd>`. Open a PR when done.**
-
-**The beats the audience sees (~30s–few min):**
-1. **"Opening a Claude Code session…"** — Hermes calls `open_session`; claude boots in `~/dev/portal`.
-2. **Progress digests, ~every 25s** — one line each:
-   `🔧 Read(src/…)` → `… thinking` → `✏️ Update(src/Foo.tsx)` → `🔧 Bash(<verify cmd>)`.
-   (This is the live `read_progress` feed — the "watch it work" moment.)
-3. **"Verified ✓"** — claude runs your command, reports pass.
-4. **The PR gate** — the bot asks: *"Verified on `tb/proj-123` — open a PR?"* → **you reply "yes."**
-5. **PR link posted** — committed the branch, pushed, `gh pr create` → **PR URL in the channel.** Open it;
-   show the diff. Done.
-
-**Optionally** open the browser view mid-run to show the live pane + activity bar (only if you ran a server;
-not needed for the chat demo).
-
----
-
-## 3. Talking points (highlight while it runs)
-
-- **Subscription, not API** — "every token here bills against the Claude plan, shared across sessions."
-- **Real repo, real PR** — "it's editing our actual code and opening a real PR — not a sandbox toy."
-- **Human-in-the-loop** — "it asked me before opening the PR; I could've taken over in the browser anytime."
-- **Safe** — "isolated tmux socket; for untrusted callers we pin it to a docker container."
-- **Fleet** — "this is one agent; an orchestrator can run many in parallel on the one subscription."
-
----
-
-## 4. If something flakes — zero-infra CLI fallback (no Hermes, no Discord)
-
-Same loop, one terminal command — great backup if the gateway/Discord misbehaves:
-```bash
-cd ~/dev/termbridge   # a clone of github.com/shivang2000/termbridge (bun install once)
-bun scripts/engineer.ts --repo ~/dev/portal \
-  --goal "PROJ-123: <title> — <body>" --accept "<criteria>" --verify "<cmd>" --env local --pr ask
+@hermes-work-agent use the termbridge MCP + the engineer-loop skill.
+Open a termbridge session — env: local, cwd: <ABS REPO PATH> — running claude.
+Then give Claude this goal (Claude has a Jira MCP, so let IT fetch the ticket):
+"Using your Jira MCP, fetch <TICKET> and read it. <scope: frontend-only, ignore backend point N, etc.>
+Implement ONLY those changes in <repo>. When done, run <fast verify> and fix anything it flags."
+DO: approve the plan once (auto-accept); iterate until verify passes; ~25s progress updates;
+    when verify passes, commit a branch and open a PR in-session via gh; post the link. (No need to ask.)
+DO NOT: touch out-of-scope/backend code, other repos, unrelated files/deps/CI.
 ```
-Edits → verifies → asks → opens the PR via your host `gh`. Progress streams to the terminal.
+(Full template: [`docs/demo/jira-ticket-prompt.md`](jira-ticket-prompt.md).)
+
+**Beats the audience sees:**
+1. **Session opens; Claude fetches the ticket** via its Jira MCP.
+2. **PLAN mode** — Claude researches read-only and **designs** the change; presents a plan. *(Great demo
+   beat: "it planned before touching code.")*
+3. **Bot accepts the plan with auto-accept** → Claude **executes the whole change with no per-edit prompts**.
+4. **Verify** — runs lint/typecheck/tests, fixes what it flags.
+5. **In-session PR** — commits a branch, `gh pr create` (using the forwarded token) → **PR link in the
+   channel.** Open it, show the diff. Done.
+
+**Watch the raw terminal live** (optional): `tmux -L termbridge ls` → `tmux -L termbridge attach -r -t <name>`
+(`-r` = read-only). A browser watch URL for the bot's sessions is not wired yet (tracked as M9).
+
+---
+
+## 3. Talking points (while it runs)
+
+- **Plan-first** — "it designed the change before editing — I approved the plan once, then it ran autonomously."
+- **Real repo, real PR** — "actual code, a real PR on our repo — not a sandbox toy."
+- **Jira by Claude** — "Hermes doesn't need a Jira tool; Claude fetches the ticket with its own MCP."
+- **Scoped** — "I told it to ignore the backend point — it skipped it and only did the frontend."
+- **Human-in-the-loop** — "I can `tmux attach` and take over the live session anytime."
+- **Fleet** — "this is one agent; an orchestrator can run many in parallel."
+
+---
+
+## 4. Tips / gotchas (learned live)
+
+- **Pick a SMALL ticket.** A 1–2 file change still takes a few minutes (planning + verify). Don't demo a
+  sprawling change live.
+- **Both tokens or it stalls.** No `--api-key` → "Not logged in" (Keychain). No `--gh-token`/PAT → PR push
+  fails "gh auth invalid" (Keychain + multi-account). The PAT must be the account with repo access (SSO-authorized).
+- **gh runs IN the session**, not Hermes's host context — that's why the forwarded `GH_TOKEN` matters.
+- **Finish a stuck PR** (branch committed, push blocked) from YOUR OWN terminal:
+  `GH_TOKEN=ghp_… git push -u origin <branch> && GH_TOKEN=ghp_… gh pr create --base <base> --head <branch> --fill`.
 
 ---
 
 ## 5. Reset between runs
 
 ```bash
-gh pr close <pr#> --delete-branch        # tidy the demo PR
-git -C ~/dev/portal checkout main && git -C ~/dev/portal branch -D tb/<slug> 2>/dev/null || true
+gh pr close <pr#> --delete-branch
+git -C <repo> checkout <base> && git -C <repo> branch -D <branch> 2>/dev/null || true
 tmux -L termbridge kill-server 2>/dev/null || true   # ONLY the -L termbridge socket — never your default tmux
 ```
 > Never run `pkill -f claude` or `tmux kill-server` without `-L termbridge` — that can kill your own
@@ -128,11 +109,6 @@ tmux -L termbridge kill-server 2>/dev/null || true   # ONLY the -L termbridge so
 
 ## Docker mode (isolated — for the "untrusted/shared bot" framing)
 
-Use `TERMBRIDGE_ALLOWED_ENVS=docker` and pull the sandbox image first:
-```bash
-docker pull shivang2000/termbridge-sandbox:latest
-docker tag  shivang2000/termbridge-sandbox:latest termbridge:dev
-```
-Each session runs in a container with the repo bind-mounted. For the container to open the PR itself, add
-`GH_TOKEN=<token>` to the termbridge MCP env (it's forwarded into the session); otherwise claude commits a
-branch and you push + open the PR from the host. Everything else in the run is identical.
+`--mode docker` runs each session in a container (repo bind-mounted) using the shared creds volume +
+`shivang2000/termbridge-sandbox` image — no host Keychain involved, so subscription login works via the
+file-creds volume. Forward `GH_TOKEN`/`--gh-token` for in-container PRs. Everything else in the run is identical.

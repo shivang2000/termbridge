@@ -98,8 +98,14 @@ wait_for_text, close_session). YOU are the loop.
   which is the simplest path (no bind-mount, no token). Use whichever the deployment permits.
 - **Approve to keep moving.** Auto-approve claude's edit/command permission prompts (Enter) — that is
   the point of the autonomous loop. (The sandbox is the container.)
-- **Cadence.** Aim for a progress update every ~25s. You act in turns, so use the `wait_for_idle`
-  timeout as your pacing.
+- **Cadence — keep pumping; don't wait to be asked.** Aim for a progress update every ~25s and **continue
+  the loop on your own** — do NOT pause until the user types "status". Each tick: `wait_for_idle` (your
+  pacing), `read_progress`, post one line, repeat — straight through to `TB_LOOP_DONE`.
+- **Stall guard — never spam keys at a wedged session.** If several ticks show NO new output, or
+  `read_progress`/`read_screen`/`list_sessions` errors or returns unchanged, do NOT blindly send `1`/`2`/Enter
+  in a `sleep`-loop. Instead: `read_screen` once — if there's a genuine prompt, send ONE matching key; if the
+  screen is unchanged or the MCP is unreachable, STOP, report *"session looks wedged (last screen: …)"* and
+  ask the user, or `close_session` + reopen once. A long blind key-spam loop is a bug, not progress.
 - **Round-complete = wait_for_idle**, not "no new output". A quiet gap is not "done"; only the
   `TB_LOOP_DONE` marker is.
 - **Be honest** about the result. If acceptance wasn't met in the round budget, say so and offer to
