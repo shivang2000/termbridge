@@ -21,6 +21,7 @@
 #                           which a gateway-spawned claude can't read; an API key avoids that. (Metered.)
 #   --skip-login            don't run the one-time Claude login (assume creds already present)
 #   --restart               run `hermes gateway restart` at the end (⚠️ kills running agents)
+#   --watch  start a host web server so you can WATCH/intervene in a browser (local mode; needs bun)
 #   -h | --help
 set -euo pipefail
 
@@ -33,6 +34,7 @@ GH_TOKEN_ARG="${GH_TOKEN:-}"
 API_KEY="${ANTHROPIC_API_KEY:-}"
 SKIP_LOGIN="false"
 DO_RESTART="false"
+DO_WATCH="false"
 TERMBRIDGE_HOME="${TERMBRIDGE_HOME:-$HOME/.termbridge/home}"
 SKILL_URL="https://raw.githubusercontent.com/shivang2000/termbridge/main/skills/engineer-loop/SKILL.md"
 SANDBOX_REPO="shivang2000/termbridge-sandbox"
@@ -44,7 +46,7 @@ ok()   { printf '%s\n' "  ${G}✓${N} $*"; }
 warn() { printf '%s\n' "  ${Y}!${N} $*"; }
 die()  { printf '%s\n' "  ${R}✗ $*${N}" >&2; exit 1; }
 # Mask secrets when echoing an env KEY=VALUE pair.
-mask_kv() { case "$1" in GH_TOKEN=*) echo "GH_TOKEN=***";; ANTHROPIC_API_KEY=*) echo "ANTHROPIC_API_KEY=***";; *) echo "$1";; esac; }
+mask_kv() { case "$1" in GH_TOKEN=*) echo "GH_TOKEN=***";; ANTHROPIC_API_KEY=*) echo "ANTHROPIC_API_KEY=***";; TERMBRIDGE_TOKEN=*) echo "TERMBRIDGE_TOKEN=***";; *) echo "$1";; esac; }
 
 # ---- args --------------------------------------------------------------------
 while [ $# -gt 0 ]; do
@@ -56,6 +58,7 @@ while [ $# -gt 0 ]; do
     --api-key)      API_KEY="${2:-}"; shift 2 ;;
     --skip-login)   SKIP_LOGIN="true"; shift ;;
     --restart)      DO_RESTART="true"; shift ;;
+    --watch)        DO_WATCH="true"; shift ;;
     -h|--help)      awk 'NR>1 && /^#/{sub(/^# ?/,"");print;next} NR>1{exit}' "$0"; exit 0 ;;
     *)              die "unknown flag: $1 (try --help)" ;;
   esac
@@ -179,24 +182,50 @@ fi
 # No clone needed: sessions run from the Docker Hub image, the MCP server from
 # `npx -y @termbridge/mcp-server`, and the skill from a raw URL.
 
-# ---- 5. register MCP + skill in Hermes ---------------------------------------
-ENV_PAIRS=( "TERMBRIDGE_TMUX_SOCKET=termbridge" \
-            "TERMBRIDGE_ALLOWED_ENVS=$ALLOWED_ENVS" "TERMBRIDGE_MAX_SESSIONS=$MAX_SESSIONS" )
-# local mode = host-native: do NOT set TERMBRIDGE_HOME, so sessions inherit your REAL HOME
-# (your claude install + login + MCPs). Setting it would point HOME at the bare creds volume
-# and the host claude couldn't find its install. docker mode needs the shared creds volume.
-[ "$MODE" != "local" ] && ENV_PAIRS+=( "TERMBRIDGE_HOME=$TERMBRIDGE_HOME" )
-# Local mode: auto-forward the host's gh TOKEN so the session's gh works without the
-# macOS keyring (a gateway-spawned gh can't read it → "invalid token", PR push fails).
-# `gh auth token` runs here in your terminal where the keyring IS readable. --gh-token overrides.
-if [ "$MODE" = "local" ] && [ -z "$GH_TOKEN_ARG" ] && command -v gh >/dev/null 2>&1; then
-  GH_TOKEN_ARG="$(gh auth token 2>/dev/null || true)"
-  [ -n "$GH_TOKEN_ARG" ] && ok "forwarding your gh token into sessions (in-session PRs; no keyring needed)"
+# ---- 4b. start the watch server (--watch only, before ENV_PAIRS) -------------
+WATCH_URL=""
+if [ "$DO_WATCH" = "true" ]; then
+  [ "$MODE" = "local" ] || die "--watch is local-mode only (the server drives host tmux/claude)."
+  command -v bun >/dev/null 2>&1 || die "--watch needs bun on PATH (the web server is Bun-only)."
+  step "Starting the watch server (bunx @termbridge/server)"
+  WATCH_TOKEN="$(head -c16 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+  WATCH_PORT="$(node -e 'const n=require("net").createServer();n.listen(0,()=>{console.log(n.address().port);n.close()})')"
+  WATCH_DIR="$HOME/.termbridge"; mkdir -p "$WATCH_DIR"
+  [ -f "$WATCH_DIR/watch.pid" ] && kill "$(cat "$WATCH_DIR/watch.pid")" 2>/dev/null || true
+  _WATCH_ENV="TERMBRIDGE_ALLOWED_ENVS=local TERMBRIDGE_TMUX_SOCKET=termbridge TERMBRIDGE_AUTO_APPROVE=1 TERMBRIDGE_FORWARD_ENV=ANTHROPIC_API_KEY TERMBRIDGE_TOKEN=$WATCH_TOKEN PORT=$WATCH_PORT HOST=127.0.0.1"
+  [ -n "$API_KEY" ]       && _WATCH_ENV="ANTHROPIC_API_KEY=$API_KEY $_WATCH_ENV"
+  [ -n "$GH_TOKEN_ARG" ]  && _WATCH_ENV="GH_TOKEN=$GH_TOKEN_ARG $_WATCH_ENV"
+  nohup env $_WATCH_ENV bunx @termbridge/server >"$WATCH_DIR/watch.log" 2>&1 &
+  echo $! > "$WATCH_DIR/watch.pid"
+  WATCH_URL="http://127.0.0.1:$WATCH_PORT/?token=$WATCH_TOKEN"
+  printf '{"port":%s,"token":"%s","pid":%s}\n' "$WATCH_PORT" "$WATCH_TOKEN" "$(cat "$WATCH_DIR/watch.pid")" > "$WATCH_DIR/watch.json"
+  ok "watch server up on 127.0.0.1:$WATCH_PORT (loopback + token)"
 fi
-[ -n "$GH_TOKEN_ARG" ] && ENV_PAIRS+=( "GH_TOKEN=$GH_TOKEN_ARG" )
-# API-key auth (forwarded into the session). On macOS local mode this is the reliable path:
-# the subscription login is in the Keychain, which a gateway-spawned claude can't read.
-[ -n "$API_KEY" ] && ENV_PAIRS+=( "TERMBRIDGE_FORWARD_ENV=ANTHROPIC_API_KEY" "ANTHROPIC_API_KEY=$API_KEY" )
+
+# ---- 5. register MCP + skill in Hermes ---------------------------------------
+if [ "$DO_WATCH" = "true" ]; then
+  # Proxy mode: the MCP gets only the routing vars; session config (api-key, gh-token,
+  # allowed-envs, auto-approve) goes to the server process started above, not the MCP.
+  ENV_PAIRS=( "TERMBRIDGE_SERVER_URL=http://127.0.0.1:$WATCH_PORT" "TERMBRIDGE_TOKEN=$WATCH_TOKEN" )
+else
+  ENV_PAIRS=( "TERMBRIDGE_TMUX_SOCKET=termbridge" \
+              "TERMBRIDGE_ALLOWED_ENVS=$ALLOWED_ENVS" "TERMBRIDGE_MAX_SESSIONS=$MAX_SESSIONS" )
+  # local mode = host-native: do NOT set TERMBRIDGE_HOME, so sessions inherit your REAL HOME
+  # (your claude install + login + MCPs). Setting it would point HOME at the bare creds volume
+  # and the host claude couldn't find its install. docker mode needs the shared creds volume.
+  [ "$MODE" != "local" ] && ENV_PAIRS+=( "TERMBRIDGE_HOME=$TERMBRIDGE_HOME" )
+  # Local mode: auto-forward the host's gh TOKEN so the session's gh works without the
+  # macOS keyring (a gateway-spawned gh can't read it → "invalid token", PR push fails).
+  # `gh auth token` runs here in your terminal where the keyring IS readable. --gh-token overrides.
+  if [ "$MODE" = "local" ] && [ -z "$GH_TOKEN_ARG" ] && command -v gh >/dev/null 2>&1; then
+    GH_TOKEN_ARG="$(gh auth token 2>/dev/null || true)"
+    [ -n "$GH_TOKEN_ARG" ] && ok "forwarding your gh token into sessions (in-session PRs; no keyring needed)"
+  fi
+  [ -n "$GH_TOKEN_ARG" ] && ENV_PAIRS+=( "GH_TOKEN=$GH_TOKEN_ARG" )
+  # API-key auth (forwarded into the session). On macOS local mode this is the reliable path:
+  # the subscription login is in the Keychain, which a gateway-spawned claude can't read.
+  [ -n "$API_KEY" ] && ENV_PAIRS+=( "TERMBRIDGE_FORWARD_ENV=ANTHROPIC_API_KEY" "ANTHROPIC_API_KEY=$API_KEY" )
+fi
 
 if [ "$HAS_HERMES" = "true" ]; then
   step "Registering termbridge in Hermes (mode: $MODE · allowed envs: $ALLOWED_ENVS)"
@@ -307,6 +336,7 @@ if [ "$HAS_HERMES" = "true" ]; then
 else
   authline "  Hermes" "${Y}CLI not found${N} — MCP + skill steps printed above for you to run"
 fi
+[ -n "$WATCH_URL" ] && authline "  Browser watch" "${G}$WATCH_URL${N}  — open to watch + take over"
 
 printf '\n%s\n' "Your turn:"
 [ -f "$TERMBRIDGE_HOME/.claude/.credentials.json" ] || \
