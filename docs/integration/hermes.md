@@ -33,6 +33,8 @@ Common variations:
 curl -fsSL …/scripts/setup.sh | bash -s -- --mode local --api-key sk-ant-… --gh-token ghp_…
 # isolated docker container per session:
 curl -fsSL …/scripts/setup.sh | bash -s -- --mode docker
+# + browser watch (localhost URL to watch/intervene; needs bun on the host):
+curl -fsSL …/scripts/setup.sh | bash -s -- --mode local --api-key sk-ant-… --gh-token ghp_… --watch
 ```
 **On macOS, local mode needs the two tokens** (`--api-key`, `--gh-token`): Claude's subscription login and
 `gh`'s tokens live in the **Keychain**, which a gateway-spawned process can't read — so pass tokens that
@@ -49,6 +51,15 @@ pilots Claude; the host/agent own those):
 | **Claude** | required — Claude must be authenticated in the session | **local (macOS):** `--api-key sk-ant-…` (the Keychain login isn't readable by a gateway-spawned claude). **docker:** the file-creds volume (`setup.sh` runs the one-time login). |
 | **GitHub** | to open the PR **in-session** | `--gh-token ghp_…` (PAT, `repo`+`workflow`, SSO-authorized) — forwarded into the session. Local mode also auto-forwards `gh auth token`, but a PAT is the reliable path past the Keychain + multi-account mess. |
 | **Jira / tracker** | optional | **the driven Claude fetches the ticket via its own Jira MCP** (local mode = your real `~/.claude`, so your MCPs load). Hermes itself needs no Jira tool. |
+
+### Watch in the browser
+
+`setup.sh --watch` (local mode) starts `bunx @termbridge/server` on the host and registers the MCP to
+proxy to it (`TERMBRIDGE_SERVER_URL` + `TERMBRIDGE_TOKEN`), so the web bridge and the agent share one
+session registry. It prints a `http://127.0.0.1:PORT/?token=…` URL. The `engineer-loop` skill then posts
+the per-session `?session=<id>&token=…` URL in chat — open it to watch the live pane + activity bar;
+**type to take over** (the in-session auto-approver pauses while you drive). Loopback + token; local mode
+only.
 
 Then jump to [Use it](#use-it-in-chat). The manual steps below are what the script automates.
 

@@ -1,0 +1,187 @@
+=== commits 95d82a4..d0fd335 ===
+d0fd335 build(server): publishable @termbridge/server (bunx) with bundled client + package-relative clientDir
+
+=== stat ===
+ packages/server/package.json  |  8 +++++-
+ packages/server/src/server.ts |  7 ++++-
+ scripts/publish-npm.ts        | 60 +++++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 73 insertions(+), 2 deletions(-)
+
+=== diff -U12 ===
+diff --git a/packages/server/package.json b/packages/server/package.json
+index f9417e8..f33146b 100644
+--- a/packages/server/package.json
++++ b/packages/server/package.json
+@@ -1,26 +1,32 @@
+ {
+ 	"name": "@termbridge/server",
+ 	"version": "1.0.5",
+-	"private": true,
++	"private": false,
+ 	"type": "module",
+ 	"license": "MIT",
++	"files": [
++		"src",
++		"client/dist"
++	],
+ 	"bin": {
+ 		"termbridge-server": "./src/index.ts"
+ 	},
+ 	"exports": {
+ 		".": "./src/index.ts"
+ 	},
+ 	"scripts": {
+ 		"build": "tsc",
++		"build:client": "cd client && bunx vite build",
++		"prepublishOnly": "bun run build:client",
+ 		"test": "bun test",
+ 		"typecheck": "tsc --noEmit",
+ 		"lint": "biome check ."
+ 	},
+ 	"dependencies": {
+ 		"@modelcontextprotocol/sdk": "^1.29.0",
+ 		"@termbridge/core": "workspace:*",
+ 		"@termbridge/mcp-server": "workspace:*",
+ 		"hono": "^4.8.2",
+ 		"zod": "^3.24.2"
+ 	},
+ 	"devDependencies": {
+diff --git a/packages/server/src/server.ts b/packages/server/src/server.ts
+index 91ae751..3c74664 100644
+--- a/packages/server/src/server.ts
++++ b/packages/server/src/server.ts
+@@ -3,31 +3,36 @@
+ //     shares the SessionManager so WriteLock arbitrates agent vs human).
+ //   • GET  /ws/:id         — human watch+intervene WebSocket (tmux primitives,
+ //     no PTY): capture-pane init → pipe-pane stream out, send-keys in.
+ //   • GET  /healthz, static client at /*.
+ // Runs on Bun (createBunWebSocket); no node-pty (it fails under Bun and tmux
+ // gives us output/input/resize natively).
+ //
+ // SECURITY: this is a session-piloting control plane (send_text == remote command
+ // execution). The tool API and WS are gated by a bearer token (constant-time) and
+ // the WS additionally by an Origin allowlist (CSWSH defence); index.ts binds
+ // loopback by default. A missing token config means "unauthenticated" (tests only).
+ 
++import { fileURLToPath } from "node:url";
+ import type { SessionManager } from "@termbridge/core";
+ import { Hono } from "hono";
+ import { createBunWebSocket, serveStatic } from "hono/bun";
+ import { createBridge } from "./bridge.js";
+ import { isAuthorized, isOriginAllowed } from "./guard.js";
+ import { createToolDispatch } from "./http-tools.js";
+ 
++// Resolve relative to this file so the path works both in-repo (dev) and when
++// the package is installed via bunx from node_modules.
++const DEFAULT_CLIENT_DIR = fileURLToPath(new URL("../client/dist", import.meta.url));
++
+ const { upgradeWebSocket, websocket } = createBunWebSocket();
+ 
+ export interface TermbridgeServerOptions {
+ 	manager: SessionManager;
+ 	/** Bearer token required for /api/tool and /ws (`?token=` or `Authorization: Bearer`). Omit only in tests. */
+ 	token?: string;
+ 	/** Browser Origins allowed to open the WS (CSWSH defence). Native (no-Origin) clients are always allowed. */
+ 	allowedOrigins?: string[];
+ 	/** Directory of the built xterm client (vite output). */
+ 	clientDir?: string;
+ 	/** How often to poll recognizer events for attached WS clients (ms). */
+ 	eventPollMs?: number;
+@@ -127,18 +132,18 @@ export function createTermbridgeServer(opts: TermbridgeServerOptions): Termbridg
+ 			// Cap reached or open failed — reuse an existing session if there is one.
+ 			const existing = manager.list()[0];
+ 			if (!existing) {
+ 				return c.json({ ok: false, error: "could not open a session" }, 503);
+ 			}
+ 			id = existing.id;
+ 		}
+ 		const qs = token ? `?session=${id}&token=${encodeURIComponent(token)}` : `?session=${id}`;
+ 		return c.redirect(`/${qs}`);
+ 	});
+ 
+ 	// Static xterm client (vite build output). Best-effort: 404s if not built.
+-	const clientDir = opts.clientDir ?? "./packages/server/client/dist";
++	const clientDir = opts.clientDir ?? DEFAULT_CLIENT_DIR;
+ 	app.get("/", serveStatic({ path: `${clientDir}/index.html` }));
+ 	app.use("/*", serveStatic({ root: clientDir }));
+ 
+ 	return { app, websocket };
+ }
+diff --git a/scripts/publish-npm.ts b/scripts/publish-npm.ts
+index ae940a1..bea50e8 100644
+--- a/scripts/publish-npm.ts
++++ b/scripts/publish-npm.ts
+@@ -60,13 +60,73 @@ for (const p of PKGS) {
+ 	delete j.private;
+ 	writeFileSync(path, `${JSON.stringify(j, null, "\t")}\n`);
+ 	try {
+ 		console.log(`[npm] publishing @termbridge/${p}@${j.version} …`);
+ 		execFileSync("npm", ["publish", "-w", `@termbridge/${p}`, "--access", "public"], {
+ 			cwd: root,
+ 			stdio: "inherit",
+ 		});
+ 	} finally {
+ 		writeFileSync(path, orig); // restore the src-pointing dev manifest exactly
+ 	}
+ }
++
++// --- @termbridge/server ---
++// Ships TypeScript source directly (Bun runs TS); no dist swap needed.
++// The client must be built first. workspace:* deps are rewritten to the
++// published version so npm can resolve them.
++{
++	const p = "server";
++	const pkgPath = join("packages", p, "package.json");
++	const orig = readFileSync(pkgPath, "utf8");
++	const j = JSON.parse(orig);
++	const version: string = j.version;
++
++	// Idempotent guard.
++	let already = false;
++	try {
++		const out = execFileSync("npm", ["view", `@termbridge/${p}@${version}`, "version"], {
++			encoding: "utf8",
++			stdio: ["ignore", "pipe", "ignore"],
++		});
++		already = out.trim() === version;
++	} catch {
++		already = false;
++	}
++	if (already) {
++		console.log(`[npm] @termbridge/${p}@${version} already published — skipping`);
++	} else {
++		// Build the web client so client/dist is present in the tarball.
++		console.log("[npm] building @termbridge/server client…");
++		execFileSync("bun", ["run", "build:client"], {
++			cwd: join(root, "packages", p),
++			stdio: "inherit",
++		});
++
++		// Rewrite workspace:* → ^<version> for npm compatibility.
++		const published = JSON.parse(orig);
++		delete published.private;
++		for (const depField of ["dependencies", "devDependencies", "peerDependencies"] as const) {
++			const deps = published[depField] as Record<string, string> | undefined;
++			if (!deps) continue;
++			for (const [name, val] of Object.entries(deps)) {
++				if (val === "workspace:*" || val.startsWith("workspace:")) {
++					// Use the same version as this package (all @termbridge/* travel together).
++					deps[name] = `^${version}`;
++				}
++			}
++		}
++
++		writeFileSync(pkgPath, `${JSON.stringify(published, null, "\t")}\n`);
++		try {
++			console.log(`[npm] publishing @termbridge/${p}@${version} …`);
++			execFileSync("npm", ["publish", "-w", `@termbridge/${p}`, "--access", "public"], {
++				cwd: root,
++				stdio: "inherit",
++			});
++		} finally {
++			writeFileSync(pkgPath, orig); // restore exactly
++		}
++	}
++}
++
+ console.log("[npm] done.");

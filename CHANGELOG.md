@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.0.6 — 2026-06-24
+
+Browser watch for Hermes-driven sessions.
+
+- **`@termbridge/mcp-server` proxy mode:** with `TERMBRIDGE_SERVER_URL` set, the stdio MCP forwards every
+  tool to a running unified server instead of its own SessionManager — so the web bridge and the agent
+  share ONE session registry (the browser watches exactly what the agent drives). Unset = unchanged.
+- **`@termbridge/server` is now published** (Bun; `bunx @termbridge/server`) with its web client bundled.
+- **`setup.sh --watch`** (local mode): starts the host web server, registers the MCP to proxy to it, and
+  prints a loopback `http://127.0.0.1:PORT/?token=…` watch URL. The engineer-loop skill posts the
+  per-session URL; typing in the browser takes over (the in-session auto-approver pauses).
+
 ## v1.0.5 — 2026-06-23
 
 In-session **auto-approver** — Claude never stalls on permission prompts.

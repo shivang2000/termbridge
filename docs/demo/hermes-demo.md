@@ -30,7 +30,7 @@ logged in" / "gh auth invalid". Passing tokens via env sidesteps the Keychain en
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/shivang2000/termbridge/main/scripts/setup.sh \
-  | bash -s -- --mode local --api-key sk-ant-YOURKEY --gh-token ghp_YOURPAT
+  | bash -s -- --mode local --api-key sk-ant-YOURKEY --gh-token ghp_YOURPAT --watch
 ```
 The recap should show `auth: ANTHROPIC_API_KEY …` and `✓ gh token forwarded — in-session PRs`. Then apply
 (a restart **kills running agents**, so do it now while idle):
@@ -67,8 +67,11 @@ DO NOT: touch out-of-scope/backend code, other repos, unrelated files/deps/CI.
 5. **In-session PR** — commits a branch, `gh pr create` (using the forwarded token) → **PR link in the
    channel.** Open it, show the diff. Done.
 
-**Watch the raw terminal live** (optional): `tmux -L termbridge ls` → `tmux -L termbridge attach -r -t <name>`
-(`-r` = read-only). A browser watch URL for the bot's sessions is not wired yet (tracked as M9).
+**Watch in the browser** (with `--watch`): setup starts `bunx @termbridge/server` on the host and the bot
+posts a per-session `http://127.0.0.1:PORT/?session=<id>&token=…` URL in chat — open it to watch the live
+pane + activity bar; **type to take over** (the in-session auto-approver pauses while you drive). Loopback
++ token; local mode only. Without `--watch`, use `tmux -L termbridge attach -r -t <name>` as the no-server
+fallback (`-r` = read-only).
 
 ---
 

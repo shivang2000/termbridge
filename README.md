@@ -62,6 +62,8 @@ gateway-spawned process can't read):
 curl -fsSL https://raw.githubusercontent.com/shivang2000/termbridge/main/scripts/setup.sh \
   | bash -s -- --mode local --api-key sk-ant-… --gh-token ghp_…
 ```
+Add `--watch` to also start a localhost browser view — the bot posts a per-session URL so you can watch +
+intervene live (needs `bun` on the host; local mode only).
 Details + manual steps: **[docs/integration/hermes.md](docs/integration/hermes.md)**. Live-demo runbook
 (proven: ticket → plan → in-session PR): **[docs/demo/hermes-demo.md](docs/demo/hermes-demo.md)**.
 
