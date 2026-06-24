@@ -35,6 +35,12 @@ wait_for_text, close_session). YOU are the loop.
    isolation boundary is the env: `docker` for untrusted/shared chat; a trusted single-user laptop for
    `local`. Use the env the operator/user specifies — `"docker"` default, `"local"` when they ask (claude
    runs on the host's `-L termbridge` tmux; the user's default tmux is never touched). Remember the `id`.
+
+   > After `open_session`, if `TERMBRIDGE_SERVER_URL` is set in your environment, post the live watch URL to the
+   > channel ONCE: `<TERMBRIDGE_SERVER_URL>/?session=<id>&token=<TERMBRIDGE_TOKEN>` — *"Watch live / take over
+   > here."* Typing in that page flips the session's WriteLock → your sends are refused (`human_driving`) and the
+   > in-session auto-approver pauses, so the human is fully in control until they stop.
+
 2. `wait_for_idle` `{ "id", "quietMs": 2500, "timeoutMs": 120000 }` to let the TUI boot.
 3. `read_progress` `{ "id" }` (and `read_screen` if unsure). Clear the two boot gates yourself:
    - **Folder-trust** (`awaitingInput`, "Do you trust…"): approve with `send_control` `{ "id", "key": "Enter" }`,
