@@ -40,3 +40,4 @@ tmp/
 # local debug artifacts (web-UI screenshots, playwright snapshots)
 termbridge-*.png
 .playwright-mcp/
+.superpowers/
