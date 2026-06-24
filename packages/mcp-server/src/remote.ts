@@ -2,6 +2,7 @@
 // tool API instead of an in-process SessionManager, so the browser (served by
 // that server) watches the exact sessions this MCP drives. Lifted from
 // scripts/engineer.ts's HTTP client; keys ONLY on the outer {ok} envelope.
+import { tmpdir } from "node:os";
 import { SessionManager } from "@termbridge/core";
 import { createToolSpecs, type ToolSpec } from "./tools.js";
 
@@ -30,10 +31,11 @@ export function createRemoteCaller(opts: RemoteOptions): RemoteCaller {
 }
 
 /** Reuse createToolSpecs ONLY for name/description/inputSchema; swap each handler
- *  to the remote caller. The throwaway manager is never opened (no tmux/observer);
- *  in proxy mode TERMBRIDGE_HOME is unset so its construction has no side effects. */
+ *  to the remote caller. The throwaway manager is NEVER opened (no tmux/observer);
+ *  pipeDir is set to the existing OS tmpdir so construction allocates nothing (no
+ *  default mkdtemp), and TERMBRIDGE_HOME is unset in proxy mode → no auth dir either. */
 export function createRemoteToolSpecs(caller: RemoteCaller): ToolSpec[] {
-	return createToolSpecs(new SessionManager()).map((s) => ({
+	return createToolSpecs(new SessionManager({ pipeDir: tmpdir() })).map((s) => ({
 		name: s.name,
 		description: s.description,
 		inputSchema: s.inputSchema,

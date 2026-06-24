@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createRemoteCaller } from "./remote.js";
+import { createRemoteCaller, createRemoteToolSpecs } from "./remote.js";
 
 function stubFetch(
 	handler: (url: string, init: RequestInit) => { status?: number; body: unknown },
@@ -51,5 +51,23 @@ describe("createRemoteCaller", () => {
 			ok: false,
 			error: "human_driving",
 		});
+	});
+});
+
+describe("createRemoteToolSpecs", () => {
+	test("mirrors the tool names and delegates each handler to the caller", async () => {
+		const calls: Array<[string, unknown]> = [];
+		const caller = async (name: string, args: unknown) => {
+			calls.push([name, args]);
+			return { echoed: name };
+		};
+		const specs = createRemoteToolSpecs(caller);
+		expect(specs.map((s) => s.name)).toEqual(
+			expect.arrayContaining(["open_session", "send_text", "list_sessions"]),
+		);
+		const open = specs.find((s) => s.name === "open_session");
+		if (!open) throw new Error("open_session spec not found");
+		expect(await open.handler({ env: "local" })).toEqual({ echoed: "open_session" });
+		expect(calls).toEqual([["open_session", { env: "local" }]]);
 	});
 });
