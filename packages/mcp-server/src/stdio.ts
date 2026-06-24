@@ -9,7 +9,9 @@ import { createServer } from "./server.js";
 
 /** Build the server and connect it to a stdio transport. Resolves once connected. */
 export async function runServer(): Promise<void> {
-	const server = createServer();
+	const serverUrl = process.env.TERMBRIDGE_SERVER_URL;
+	const token = process.env.TERMBRIDGE_TOKEN ?? "";
+	const server = createServer(serverUrl ? { remote: { serverUrl, token } } : {});
 	const transport = new StdioServerTransport();
 	await server.connect(transport);
 }
