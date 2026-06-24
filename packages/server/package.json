@@ -6,7 +6,8 @@
 	"license": "MIT",
 	"files": [
 		"src",
-		"client/dist"
+		"client/dist",
+		"!src/**/*.test.ts"
 	],
 	"bin": {
 		"termbridge-server": "./src/index.ts"
@@ -17,7 +18,6 @@
 	"scripts": {
 		"build": "tsc",
 		"build:client": "cd client && bunx vite build",
-		"prepublishOnly": "bun run build:client",
 		"test": "bun test",
 		"typecheck": "tsc --noEmit",
 		"lint": "biome check ."
