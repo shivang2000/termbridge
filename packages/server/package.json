@@ -1,9 +1,13 @@
 {
 	"name": "@termbridge/server",
 	"version": "1.0.5",
-	"private": true,
+	"private": false,
 	"type": "module",
 	"license": "MIT",
+	"files": [
+		"src",
+		"client/dist"
+	],
 	"bin": {
 		"termbridge-server": "./src/index.ts"
 	},
@@ -12,6 +16,8 @@
 	},
 	"scripts": {
 		"build": "tsc",
+		"build:client": "cd client && bunx vite build",
+		"prepublishOnly": "bun run build:client",
 		"test": "bun test",
 		"typecheck": "tsc --noEmit",
 		"lint": "biome check ."

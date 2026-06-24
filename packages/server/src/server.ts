@@ -12,12 +12,17 @@
 // the WS additionally by an Origin allowlist (CSWSH defence); index.ts binds
 // loopback by default. A missing token config means "unauthenticated" (tests only).
 
+import { fileURLToPath } from "node:url";
 import type { SessionManager } from "@termbridge/core";
 import { Hono } from "hono";
 import { createBunWebSocket, serveStatic } from "hono/bun";
 import { createBridge } from "./bridge.js";
 import { isAuthorized, isOriginAllowed } from "./guard.js";
 import { createToolDispatch } from "./http-tools.js";
+
+// Resolve relative to this file so the path works both in-repo (dev) and when
+// the package is installed via bunx from node_modules.
+const DEFAULT_CLIENT_DIR = fileURLToPath(new URL("../client/dist", import.meta.url));
 
 const { upgradeWebSocket, websocket } = createBunWebSocket();
 
@@ -136,7 +141,7 @@ export function createTermbridgeServer(opts: TermbridgeServerOptions): Termbridg
 	});
 
 	// Static xterm client (vite build output). Best-effort: 404s if not built.
-	const clientDir = opts.clientDir ?? "./packages/server/client/dist";
+	const clientDir = opts.clientDir ?? DEFAULT_CLIENT_DIR;
 	app.get("/", serveStatic({ path: `${clientDir}/index.html` }));
 	app.use("/*", serveStatic({ root: clientDir }));
 
