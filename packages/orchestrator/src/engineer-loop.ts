@@ -124,22 +124,23 @@ const ASK_RE = new RegExp(`${LINE_LEAD}TB_ASK:[ \\t]*(.+?)[ \\t]*$`, "im");
  * Returns the LAST TB_ASK marker found, not the first. Claude can ask a second
  * question before the first clears the visible pane (the relay may not have
  * had time to receive and forward the first reply yet) and we must hand the
- * operator the NEWEST question the user would actually see.
+ * operator the NEWEST question the user actually sees.
  */
 export function parseAsk(screen: string): string | undefined {
-	// Iterative re-exec (lastIndex-style) — the regex isn't created with /g
-	// because the LINE_LEAD leading-anchor + multiline anchors make stateful
-	// matching fragile on re-exec of the same instance. Instead, iterate by
-	// building each exec with the substring past the previous match start.
-	const src = ASK_RE.source;
+	// Build the matcher once from the module-level ASK_RE's source + flags,
+	// then iterate by advancing a cursor into the ORIGINAL screen (no /g on
+	// ASK_RE because the LINE_LEAD leading-anchor + `im` flags make stateful
+	// re-exec fragile — slicing the rest is simpler and easier to reason about).
+	// V8 caches the compiled regex by (source, flags), so the literal source
+	// string is a hit; the per-iteration work is just the cursor advance.
+	const r = new RegExp(ASK_RE.source, ASK_RE.flags);
+	const src = screen;
 	let cursor = 0;
 	let last: string | undefined;
-	while (cursor <= screen.length) {
-		const rest = screen.slice(cursor);
-		const m = new RegExp(src, "im").exec(rest);
+	while (cursor <= src.length) {
+		const m = r.exec(src.slice(cursor));
 		if (!m || m[1] === undefined) break;
 		last = m[1];
-		// Advance cursor past the match start (in the ORIGINAL screen's coords).
 		cursor += m.index + Math.max(1, m[0].length);
 	}
 	return last;

@@ -35,6 +35,19 @@ describe("needsUserInputMarkerRecognizer", () => {
 	it("returns null on screens with no marker", () => {
 		expect(needsUserInputMarkerRecognizer.match("Just normal output here.\n", "")).toBeNull();
 	});
+
+	it("returns the LATEST TB_ASK when several are on screen (newest visible wins)", () => {
+		// An earlier question may still be painted when a NEWER one appears;
+		// downstream consumers (the question relay) must see the NEWEST one,
+		// not the stale first hit.
+		const screen =
+			"Preamble.\n" +
+			"TB_ASK: Which database?\n" +
+			"…some reply echoed…\n" +
+			"TB_ASK: And which ORM?\n";
+		const out = needsUserInputMarkerRecognizer.match(screen, "");
+		expect(out?.data.question).toBe("And which ORM?");
+	});
 });
 
 describe("selfCheckMarkerRecognizer", () => {
@@ -49,5 +62,15 @@ describe("selfCheckMarkerRecognizer", () => {
 
 	it("returns null when no marker is present", () => {
 		expect(selfCheckMarkerRecognizer.match("Just normal output here.\n", "")).toBeNull();
+	});
+
+	it("returns the LATEST TB_SELF_CHECK when several are on screen", () => {
+		const screen =
+			"Preamble.\n" +
+			"TB_SELF_CHECK: npm test\n" +
+			"…first run output…\n" +
+			"TB_SELF_CHECK: bun test\n";
+		const out = selfCheckMarkerRecognizer.match(screen, "");
+		expect(out?.data.command).toBe("bun test");
 	});
 });

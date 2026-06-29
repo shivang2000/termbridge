@@ -36,16 +36,50 @@ const LINE_LEAD = String.raw`^[ \t]*(?:[●⏺▸>*\-]\s+)?`;
 const ASK_RE = new RegExp(`${LINE_LEAD}TB_ASK:[ \\t]*(.+?)[ \\t]*$`, "im");
 const SELF_CHECK_RE = new RegExp(`${LINE_LEAD}TB_SELF_CHECK:[ \\t]*(.+?)[ \\t]*$`, "im");
 
+/**
+ * Iterate `re` against `text` and return the LAST capture group 1.
+ *
+ * The regex isn't built with /g on purpose: the LINE_LEAD leading-anchor
+ * (`^[ \t]*(?:[●⏺▸>*\-]\s+)?`) plus the `im` anchors make stateful
+ * matching fragile on a shared instance. We rebuild `re` from source +
+ * flags once (cheap — V8 caches the compiled program by (source,flags)
+ * after the first build of a given literal pair, so this is an O(1)
+ * lookup after the first call). Then we re-exec against the SUBSTRING
+ * past the previous match start, advancing the cursor in the ORIGINAL
+ * text's coordinates.
+ *
+ * Why "last" and not "first": Claude can ask a second question before
+ * the first clears the visible pane, and downstream consumers must hand
+ * the operator the NEWEST visible marker.
+ */
+function lastCaptureGroup1(re: RegExp, text: string): string | undefined {
+	// One rebuild per call. Reuse the compiled program via the source +
+	// flags; V8 keeps a small cache by (source, flags) and the regexes
+	// here are module-singletons, so this is a hash-map hit in practice.
+	const r = new RegExp(re.source, re.flags);
+	let cursor = 0;
+	let last: string | undefined;
+	while (cursor <= text.length) {
+		const rest = text.slice(cursor);
+		const m = r.exec(rest);
+		if (!m || m[1] === undefined) break;
+		last = m[1];
+		// Advance cursor past the match start (in the ORIGINAL text's coords).
+		cursor += m.index + Math.max(1, m[0].length);
+	}
+	return last;
+}
+
 export const needsUserInputMarkerRecognizer: Recognizer = {
 	kind: "needs_user_input",
 	match(screen: string, recentBytes: string): Omit<RecognizedEvent, "kind"> | null {
 		// capture-pane can return blank when bytes streamed but the visible
 		// pane hasn't repainted yet — fall back to the recent bytes buffer.
 		const raw = screen.trim() ? screen : recentBytes;
-		const ask = ASK_RE.exec(stripAnsi(raw));
-		if (!ask?.[1]) return null;
+		const question = lastCaptureGroup1(ASK_RE, stripAnsi(raw));
+		if (question === undefined) return null;
 		return {
-			data: { question: ask[1] },
+			data: { question },
 			// No suggested key — the relay has to WAIT for a human reply.
 			suggestedKeys: [],
 		};
@@ -56,10 +90,10 @@ export const selfCheckMarkerRecognizer: Recognizer = {
 	kind: "self_check_request",
 	match(screen: string, recentBytes: string): Omit<RecognizedEvent, "kind"> | null {
 		const raw = screen.trim() ? screen : recentBytes;
-		const sc = SELF_CHECK_RE.exec(stripAnsi(raw));
-		if (!sc?.[1]) return null;
+		const command = lastCaptureGroup1(SELF_CHECK_RE, stripAnsi(raw));
+		if (command === undefined) return null;
 		return {
-			data: { command: sc[1] },
+			data: { command },
 			suggestedKeys: [],
 		};
 	},
