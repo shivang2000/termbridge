@@ -152,10 +152,29 @@ BAK_DIR="$CLAUDE_BACKUP_ROOT/$TS"
 mkdir -p "$BAK_DIR"
 BACKED_UP=()
 # The dotfile (~/.claude.json) holds active-session state; the dir holds login + MCPs.
-[ -f "$HOME/.claude.json" ] && cp -p "$HOME/.claude.json" "$BAK_DIR/.claude.json" \
-  && BACKED_UP+=("$HOME/.claude.json")
+# We ATTEMPT only when the source is present. If cp FAILS (permission, disk, read-only
+# source we cannot stat), ABORT — silently continuing when the safety net breaks is
+# the live-demo failure mode this block exists to prevent. Re-running with --skip-login
+# + without the source present is the one legitimate skip path.
+if [ -f "$HOME/.claude.json" ]; then
+  if ! cp -p "$HOME/.claude.json" "$BAK_DIR/.claude.json" 2>/dev/null; then
+    die "could not snapshot ~/.claude.json → $BAK_DIR (source unreadable or disk full?). Fix the source first, then re-run."
+  fi
+  BACKED_UP+=("$HOME/.claude.json")
+fi
 if [ -d "$HOME/.claude" ]; then
-  cp -R "$HOME/.claude" "$BAK_DIR/.claude" && BACKED_UP+=("$HOME/.claude/")
+  if ! cp -R "$HOME/.claude" "$BAK_DIR/.claude" 2>/dev/null; then
+    die "could not snapshot ~/.claude/ → $BAK_DIR (source unreadable or disk full?). Fix the source first, then re-run."
+  fi
+  BACKED_UP+=("$HOME/.claude/")
+fi
+# Verify the snapshot contents match what we expected to back up. A silent partial
+# copy is the same failure mode — surface it.
+if [ -f "$HOME/.claude.json" ] && [ ! -f "$BAK_DIR/.claude.json" ]; then
+  die "snapshot is missing .claude.json — backup block aborted (see warning above)."
+fi
+if [ -d "$HOME/.claude" ] && [ ! -d "$BAK_DIR/.claude" ]; then
+  die "snapshot is missing .claude/ — backup block aborted (see warning above)."
 fi
 # Rotate: keep the latest 10 backups on disk (older ones have served their purpose).
 if [ -d "$CLAUDE_BACKUP_ROOT" ]; then
@@ -165,8 +184,20 @@ if [ -d "$CLAUDE_BACKUP_ROOT" ]; then
 fi
 if [ "${#BACKED_UP[@]}" -gt 0 ]; then
   ok "snapshot at $BAK_DIR ($(printf '%s ' "${BACKED_UP[@]}"))"
-  warn "future reference — restore with:"
-  printf '      %s\n' "rm -rf ~/.claude ~/.claude.json && cp -R \"$BAK_DIR/.claude\" ~/.claude && cp -p \"$BAK_DIR/.claude.json\" ~/.claude.json"
+  # Build the restore command from BACKED_UP so it only restores what actually exists
+  # in the snapshot. Avoids the operator running `cp -R` against a missing dir.
+  RESTORE_CMDS=()
+  if printf '%s\n' "${BACKED_UP[@]}" | grep -qx "$HOME/.claude/"; then
+    RESTORE_CMDS+=("rm -rf ~/.claude && cp -R \"$BAK_DIR/.claude\" ~/.claude")
+  fi
+  if printf '%s\n' "${BACKED_UP[@]}" | grep -qx "$HOME/.claude.json"; then
+    RESTORE_CMDS+=("cp -p \"$BAK_DIR/.claude.json\" ~/.claude.json")
+  fi
+  if [ "${#RESTORE_CMDS[@]}" -gt 0 ]; then
+    warn "future reference — restore with:"
+    JOINED="$(printf ' && %s' "${RESTORE_CMDS[@]}")"
+    printf '      %s\n' "${JOINED# && }"
+  fi
 else
   ok "nothing to back up (~/.claude + ~/.claude.json not present yet) — nothing to snapshot"
 fi

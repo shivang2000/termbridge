@@ -10,7 +10,7 @@ function stripAnsi(s: string): string {
 }
 
 /**
- * `tb-marker` recognizer — surfaces the marker protocol that the
+ * `tb-marker` recognizers — surface the marker protocol that the
  * `engineer-loop` skill instructs the driven claude to print.
  *
  * Markers are the contract between a driven CLI and the loop driving it:
@@ -18,9 +18,12 @@ function stripAnsi(s: string): string {
  * optional indentation + a single TUI bullet), echo-safe (the prompt's
  * instruction text must NOT match), and visible across the noisy TUI.
  *
- * Currently recognized:
- *   TB_ASK: <question>      →  needs_user_input event (question = text)
- *   TB_SELF_CHECK: <cmd>    →  self_check event  (cmd = text)
+ * Each recognizer is a separate `Recognizer` so its emitted kind at the
+ * top of the event (what `wait_for_event({ kinds: [...] })` filters on) IS
+ * the actionable type:
+ *
+ *   needs_user_input             ← TB_ASK: <question>
+ *   self_check_request           ← TB_SELF_CHECK: <cmd>
  *
  * The completion markers (`TB_LOOP_DONE`, `TB_PR_URL`, `TB_BRANCH_READY`)
  * are matched inline by `engineer-loop.ts` over the raw screen — they are
@@ -30,34 +33,34 @@ function stripAnsi(s: string): string {
 // The marker must be the FIRST token on its line (after optional indentation
 // and a single TUI bullet like ●/⏺/>/-). Mirrors engineer-loop.ts.
 const LINE_LEAD = String.raw`^[ \t]*(?:[●⏺▸>*\-]\s+)?`;
-const ASK = new RegExp(`${LINE_LEAD}TB_ASK:[ \\t]*(.+?)[ \\t]*$`, "im");
-const SELF_CHECK = new RegExp(`${LINE_LEAD}TB_SELF_CHECK:[ \\t]*(.+?)[ \\t]*$`, "im");
+const ASK_RE = new RegExp(`${LINE_LEAD}TB_ASK:[ \\t]*(.+?)[ \\t]*$`, "im");
+const SELF_CHECK_RE = new RegExp(`${LINE_LEAD}TB_SELF_CHECK:[ \\t]*(.+?)[ \\t]*$`, "im");
 
-export const tbMarkerRecognizer: Recognizer = {
-	kind: "tb-marker",
+export const needsUserInputMarkerRecognizer: Recognizer = {
+	kind: "needs_user_input",
 	match(screen: string, recentBytes: string): Omit<RecognizedEvent, "kind"> | null {
 		// capture-pane can return blank when bytes streamed but the visible
 		// pane hasn't repainted yet — fall back to the recent bytes buffer.
 		const raw = screen.trim() ? screen : recentBytes;
-		const clean = stripAnsi(raw);
+		const ask = ASK_RE.exec(stripAnsi(raw));
+		if (!ask?.[1]) return null;
+		return {
+			data: { question: ask[1] },
+			// No suggested key — the relay has to WAIT for a human reply.
+			suggestedKeys: [],
+		};
+	},
+};
 
-		const ask = ASK.exec(clean);
-		if (ask?.[1]) {
-			return {
-				data: { kind: "needs_user_input", question: ask[1] },
-				// No suggested key — the relay has to WAIT for a human reply.
-				suggestedKeys: [],
-			};
-		}
-
-		const sc = SELF_CHECK.exec(clean);
-		if (sc?.[1]) {
-			return {
-				data: { kind: "self_check", command: sc[1] },
-				suggestedKeys: [],
-			};
-		}
-
-		return null;
+export const selfCheckMarkerRecognizer: Recognizer = {
+	kind: "self_check_request",
+	match(screen: string, recentBytes: string): Omit<RecognizedEvent, "kind"> | null {
+		const raw = screen.trim() ? screen : recentBytes;
+		const sc = SELF_CHECK_RE.exec(stripAnsi(raw));
+		if (!sc?.[1]) return null;
+		return {
+			data: { command: sc[1] },
+			suggestedKeys: [],
+		};
 	},
 };

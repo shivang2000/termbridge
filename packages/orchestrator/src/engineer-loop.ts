@@ -118,9 +118,31 @@ const DONE_PASS = new RegExp(`${LINE_LEAD}TB_LOOP_DONE:[ \\t]*PASS\\b`, "im");
 const DONE_FAIL = new RegExp(`${LINE_LEAD}TB_LOOP_DONE:[ \\t]*FAIL\\b[ \\t]*(.*)$`, "im");
 const ASK_RE = new RegExp(`${LINE_LEAD}TB_ASK:[ \\t]*(.+?)[ \\t]*$`, "im");
 
-/** Extract the latest TB_ASK question from a captured screen, or undefined if none. */
+/**
+ * Extract the latest TB_ASK question from a captured screen, or undefined if none.
+ *
+ * Returns the LAST TB_ASK marker found, not the first. Claude can ask a second
+ * question before the first clears the visible pane (the relay may not have
+ * had time to receive and forward the first reply yet) and we must hand the
+ * operator the NEWEST question the user would actually see.
+ */
 export function parseAsk(screen: string): string | undefined {
-	return ASK_RE.exec(screen)?.[1];
+	// Iterative re-exec (lastIndex-style) — the regex isn't created with /g
+	// because the LINE_LEAD leading-anchor + multiline anchors make stateful
+	// matching fragile on re-exec of the same instance. Instead, iterate by
+	// building each exec with the substring past the previous match start.
+	const src = ASK_RE.source;
+	let cursor = 0;
+	let last: string | undefined;
+	while (cursor <= screen.length) {
+		const rest = screen.slice(cursor);
+		const m = new RegExp(src, "im").exec(rest);
+		if (!m || m[1] === undefined) break;
+		last = m[1];
+		// Advance cursor past the match start (in the ORIGINAL screen's coords).
+		cursor += m.index + Math.max(1, m[0].length);
+	}
+	return last;
 }
 
 /** Build the structured engineering prompt sent to claude at the start of the loop. */

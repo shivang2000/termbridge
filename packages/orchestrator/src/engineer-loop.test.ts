@@ -359,6 +359,17 @@ describe("parseAsk", () => {
 	test("returns undefined when no marker is present", () => {
 		expect(parseAsk("Just normal output here.\n")).toBeUndefined();
 	});
+
+	test("returns the LATEST TB_ASK when several are on screen (newest visible wins)", () => {
+		// Claude may ask a second question before the first clears the pane —
+		// the pump must hand the operator the NEWEST one the user actually sees.
+		const screen =
+			"Some preamble.\n" +
+			"TB_ASK: Which database?\n" +
+			"…user replied 'postgres'…\n" +
+			"TB_ASK: And which ORM?\n";
+		expect(parseAsk(screen)).toBe("And which ORM?");
+	});
 });
 
 describe("runEngineerLoop question relay", () => {
