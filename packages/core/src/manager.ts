@@ -23,6 +23,7 @@ import { genericYnRecognizer } from "./recognizers/generic-yn.js";
 import { oauthUrlRecognizer } from "./recognizers/oauth-url.js";
 import { RecognizerPipeline } from "./recognizers/pipeline.js";
 import { rateLimitRecognizer } from "./recognizers/rate-limit.js";
+import { tbMarkerRecognizer } from "./recognizers/tb-marker.js";
 import { Session } from "./session/session.js";
 import { WriteLock } from "./session/write-lock.js";
 import type {
@@ -422,6 +423,7 @@ export class SessionManager {
 		pipeline.register(genericYnRecognizer);
 		pipeline.register(rateLimitRecognizer);
 		pipeline.register(claudeActivityRecognizer);
+		pipeline.register(tbMarkerRecognizer);
 		observer.start();
 
 		const session = new Session({

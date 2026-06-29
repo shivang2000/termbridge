@@ -6,6 +6,7 @@ import {
 	correctivePrompt,
 	DONE_SENTINEL,
 	type EngineerTask,
+	parseAsk,
 	parseBranch,
 	parsePrUrl,
 	runEngineerLoop,
@@ -339,5 +340,89 @@ describe("delivery pure helpers", () => {
 		expect(p).toContain("TB_PR_URL:");
 		expect(p).toContain("TB_BRANCH_READY:");
 		expect(buildDeliveryPrompt("tb/foo", true)).toContain("--draft");
+	});
+});
+
+// --- question relay (TB_ASK: <q>) -----------------------------------------
+
+describe("parseAsk", () => {
+	test("returns the question after a leading TB_ASK: marker", () => {
+		expect(parseAsk("TB_ASK: Which auth provider?\n")).toBe("Which auth provider?");
+		expect(parseAsk("● TB_ASK:  Pick a database.\n")).toBe("Pick a database.");
+		expect(parseAsk("prompt text…\nTB_ASK: how many retries?\n")).toBe("how many retries?");
+	});
+	test("ignores TB_ASK mentioned mid-line (echo-safe)", () => {
+		expect(
+			parseAsk("When done, print: TB_ASK: PASS — the echoed prompt must not match."),
+		).toBeUndefined();
+	});
+	test("returns undefined when no marker is present", () => {
+		expect(parseAsk("Just normal output here.\n")).toBeUndefined();
+	});
+});
+
+describe("runEngineerLoop question relay", () => {
+	test("relays a TB_ASK: question, forwards the reply, and continues", async () => {
+		const { tools, calls } = mockTools({
+			idle: [{ idle: true }, { idle: true }],
+			progress: [
+				{ phase: "thinking", awaitingInput: false, nextOffset: 1 },
+				{ phase: "idle", awaitingInput: false, delta: "got the answer\n", nextOffset: 8 },
+			],
+			// First tick: claude asks the question. Second tick: it received the
+			// reply and finished — terminal end-of-turn.
+			screens: ["Some preamble\nTB_ASK: Which auth provider?\n", `${DONE_SENTINEL} PASS\n`],
+		});
+		let relayed: string | undefined;
+		const reply = await runEngineerLoop({
+			tools,
+			task: baseTask,
+			onAsk: async ({ question }) => {
+				relayed = question;
+				return "use Auth0";
+			},
+		});
+		expect(relayed).toBe("Which auth provider?");
+		expect(reply.met).toBe(true);
+		// The reply text was sent into the session.
+		const texts = sent(calls, "send_text").map((c) => String(c.args.text));
+		expect(texts).toContain("use Auth0");
+	});
+
+	test("does not re-relay the same question across ticks (dedupe)", async () => {
+		const { tools } = mockTools({
+			idle: [{ idle: true }, { idle: true }, { idle: true }],
+			progress: [
+				{ phase: "thinking", awaitingInput: false, nextOffset: 1 },
+				{ phase: "thinking", awaitingInput: false, nextOffset: 2 },
+				{ phase: "idle", awaitingInput: false, delta: "", nextOffset: 3 },
+			],
+			// Question stays on screen across ticks; relay must NOT fire repeatedly.
+			screens: [
+				"TB_ASK: pick one\n",
+				"TB_ASK: pick one\n",
+				`TB_ASK: pick one\n${DONE_SENTINEL} PASS\n`,
+			],
+		});
+		let relayCount = 0;
+		await runEngineerLoop({
+			tools,
+			task: baseTask,
+			onAsk: async () => {
+				relayCount++;
+				return "ok";
+			},
+		});
+		expect(relayCount).toBe(1);
+	});
+
+	test("skips the relay entirely when onAsk is not provided", async () => {
+		const { tools } = mockTools({
+			idle: [{ idle: true }],
+			progress: [{ phase: "idle", awaitingInput: false, delta: "", nextOffset: 1 }],
+			screens: [`${DONE_SENTINEL} PASS\n`],
+		});
+		const res = await runEngineerLoop({ tools, task: baseTask });
+		expect(res.met).toBe(true);
 	});
 });
