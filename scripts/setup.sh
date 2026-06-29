@@ -138,6 +138,39 @@ else
   fi
 fi
 
+# ---- 3b. backup the user's real ~/.claude (every run, every mode) -----------
+# A driven local-mode session mutates the host's real ~/.claude (sessions inherit
+# $HOME and the gateway inherits your login + MCPs + state). One bad config edit
+# can wedge the host claude — the live-demo failure mode that took out this user's
+# ~/.claude. So: ALWAYS snapshot ~/.claude + ~/.claude.json BEFORE the rest of
+# setup wires anything up. Idempotent (timestamped dir; never overwrites).
+step "Backing up your real ~/.claude (pre-setup safety net)"
+CLAUDE_BACKUP_ROOT="$HOME/.termbridge/backups/claude"
+mkdir -p "$CLAUDE_BACKUP_ROOT"
+TS="$(date +%Y%m%d-%H%M%S)"
+BAK_DIR="$CLAUDE_BACKUP_ROOT/$TS"
+mkdir -p "$BAK_DIR"
+BACKED_UP=()
+# The dotfile (~/.claude.json) holds active-session state; the dir holds login + MCPs.
+[ -f "$HOME/.claude.json" ] && cp -p "$HOME/.claude.json" "$BAK_DIR/.claude.json" \
+  && BACKED_UP+=("$HOME/.claude.json")
+if [ -d "$HOME/.claude" ]; then
+  cp -R "$HOME/.claude" "$BAK_DIR/.claude" && BACKED_UP+=("$HOME/.claude/")
+fi
+# Rotate: keep the latest 10 backups on disk (older ones have served their purpose).
+if [ -d "$CLAUDE_BACKUP_ROOT" ]; then
+  ls -1t "$CLAUDE_BACKUP_ROOT" 2>/dev/null | tail -n +11 | while read -r old; do
+    [ -n "$old" ] && rm -rf "$CLAUDE_BACKUP_ROOT/$old"
+  done
+fi
+if [ "${#BACKED_UP[@]}" -gt 0 ]; then
+  ok "snapshot at $BAK_DIR ($(printf '%s ' "${BACKED_UP[@]}"))"
+  warn "future reference — restore with:"
+  printf '      %s\n' "rm -rf ~/.claude ~/.claude.json && cp -R \"$BAK_DIR/.claude\" ~/.claude && cp -p \"$BAK_DIR/.claude.json\" ~/.claude.json"
+else
+  ok "nothing to back up (~/.claude + ~/.claude.json not present yet) — nothing to snapshot"
+fi
+
 # ---- 4. Claude auth ----------------------------------------------------------
 if [ "$MODE" = "local" ]; then
   step "Host Claude (local mode uses your laptop's claude: its login + MCPs like Jira)"
