@@ -61,6 +61,14 @@ export interface EngineerLoopOptions {
 	turnTimeoutMs?: number;
 	/** Called for every digest tick — relay this to the user (Discord, web, stdout). */
 	onDigest?: (d: Digest) => void;
+	/**
+	 * Called when claude prints `TB_ASK: <question>` (a question relay). MUST
+	 * resolve to the text the operator forwards BACK into the claude terminal —
+	 * the loop will `send_text` it verbatim. Forward the question to the user,
+	 * block until they reply, then return that reply. A relay is NOT a turn
+	 * boundary: claude may keep working after it receives the answer.
+	 */
+	onAsk?: (q: { question: string; sessionId: string }) => Promise<string>;
 	/** Called when the task has no acceptance criteria — elicit them from the user. */
 	elicitAcceptance?: () => Promise<string[]>;
 	/** Optional structured logger. */
@@ -99,6 +107,8 @@ export interface EngineerLoopResult {
 
 /** Machine-readable completion marker the engineering prompt instructs claude to print. */
 export const DONE_SENTINEL = "TB_LOOP_DONE:";
+/** Question relay marker — when claude prints this, the loop relays the question to the operator and blocks for a reply. */
+export const ASK_SENTINEL = "TB_ASK:";
 // The marker must be the FIRST token on its line (after optional indentation and a
 // single TUI bullet like ●/⏺/>/-). That matches claude's standalone print but NOT the
 // PROMPT's echoed instruction line ("- When … : TB_LOOP_DONE: PASS"), whose first
@@ -106,6 +116,35 @@ export const DONE_SENTINEL = "TB_LOOP_DONE:";
 const LINE_LEAD = String.raw`^[ \t]*(?:[●⏺▸>*\-]\s+)?`;
 const DONE_PASS = new RegExp(`${LINE_LEAD}TB_LOOP_DONE:[ \\t]*PASS\\b`, "im");
 const DONE_FAIL = new RegExp(`${LINE_LEAD}TB_LOOP_DONE:[ \\t]*FAIL\\b[ \\t]*(.*)$`, "im");
+const ASK_RE = new RegExp(`${LINE_LEAD}TB_ASK:[ \\t]*(.+?)[ \\t]*$`, "im");
+
+/**
+ * Extract the latest TB_ASK question from a captured screen, or undefined if none.
+ *
+ * Returns the LAST TB_ASK marker found, not the first. Claude can ask a second
+ * question before the first clears the visible pane (the relay may not have
+ * had time to receive and forward the first reply yet) and we must hand the
+ * operator the NEWEST question the user actually sees.
+ */
+export function parseAsk(screen: string): string | undefined {
+	// Build the matcher once from the module-level ASK_RE's source + flags,
+	// then iterate by advancing a cursor into the ORIGINAL screen (no /g on
+	// ASK_RE because the LINE_LEAD leading-anchor + `im` flags make stateful
+	// re-exec fragile — slicing the rest is simpler and easier to reason about).
+	// V8 caches the compiled regex by (source, flags), so the literal source
+	// string is a hit; the per-iteration work is just the cursor advance.
+	const r = new RegExp(ASK_RE.source, ASK_RE.flags);
+	const src = screen;
+	let cursor = 0;
+	let last: string | undefined;
+	while (cursor <= src.length) {
+		const m = r.exec(src.slice(cursor));
+		if (!m || m[1] === undefined) break;
+		last = m[1];
+		cursor += m.index + Math.max(1, m[0].length);
+	}
+	return last;
+}
 
 /** Build the structured engineering prompt sent to claude at the start of the loop. */
 export function buildEngineerPrompt(task: EngineerTask, acceptance: string[]): string {
@@ -130,6 +169,7 @@ export function buildEngineerPrompt(task: EngineerTask, acceptance: string[]): s
 		`- When (and ONLY when) EVERY acceptance criterion holds AND your verification passes, print a line that STARTS with the marker (nothing before it on that line): ${DONE_SENTINEL} PASS`,
 		`- If the task genuinely cannot be completed, instead print a line that starts with: ${DONE_SENTINEL} FAIL <one-line reason>`,
 		`- Do NOT print the ${DONE_SENTINEL} marker until you have actually run the verification.`,
+		`- If you need a decision or piece of information from the user that you cannot safely assume — an ambiguous requirement, a missing API key or credential, a choice between approaches, environment-specific config — print a line that STARTS with TB_ASK: <your question>. The operator will relay it to the user and forward the answer back into this terminal. Do NOT guess on ambiguous requirements; do NOT pause silently waiting for input.`,
 	].join("\n");
 }
 
@@ -316,11 +356,37 @@ export async function runEngineerLoop(opts: EngineerLoopOptions): Promise<Engine
 		// A per-turn tick ceiling guards a turn that never goes idle (runaway output
 		// or a re-painting prompt) from spinning forever.
 		let ticks = 0;
+		let lastAskedQuestion: string | undefined;
 		for (;;) {
 			if (ticks++ >= maxTurnTicks) {
 				log(`turn ${round} hit the ${turnTimeoutMs}ms ceiling without going idle; moving on`);
 				break;
 			}
+			// Question relay FIRST (before waiting for idle). If claude is blocked on a
+			// TB_ASK, the screen is idle by definition and we'd otherwise wait the full
+			// cadence to notice. Re-read the screen on every tick so a freshly printed
+			// TB_ASK surfaces within one cadence of being painted.
+			if (opts.onAsk) {
+				const { screen: askScreen } = (await tools("read_screen", {
+					id,
+					scrollback: 100,
+				})) as ScreenResult;
+				const question = parseAsk(askScreen);
+				if (question && question !== lastAskedQuestion) {
+					lastAskedQuestion = question;
+					log(`relay TB_ASK: ${question}`);
+					const reply = await opts.onAsk({ question, sessionId: id });
+					if (reply && reply.length > 0) {
+						await tools("send_text", { id, text: reply, enter: true });
+						log(`relayed reply (${reply.length} chars)`);
+					}
+					// A reply is NOT a turn boundary — claude may run more after it.
+					// Reset ticks so the relay does not consume the per-turn ceiling.
+					ticks = 0;
+					continue;
+				}
+			}
+
 			const idleRes = (await tools("wait_for_idle", {
 				id,
 				quietMs,

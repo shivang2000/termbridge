@@ -63,10 +63,23 @@ wait_for_text, close_session). YOU are the loop.
      STARTS with the marker, nothing before it: `TB_LOOP_DONE: PASS`. If it cannot be done, print a
      line starting with `TB_LOOP_DONE: FAIL <reason>`. Do not print the marker until you have actually
      run the verification."*
+   - Instruct the **question relay**: *"If you need a decision or piece of information from the user that
+     you cannot safely assume — ambiguous requirement, missing API key or credential, choice between
+     approaches, environment-specific config — print a line that STARTS with `TB_ASK: <your question>`.
+     The operator will relay it to the user and forward the answer back into this terminal. Do NOT guess
+     on ambiguous requirements; do NOT pause silently waiting for input."*
 5. **Pump the turn** (repeat): call `wait_for_idle` `{ "id", "quietMs": 4000, "timeoutMs": 25000 }`,
    then `read_progress` `{ "id", "sinceOffset": <last nextOffset> }`.
    - **Post a short digest to the user** each tick: the `phase` + tool/file + the last meaningful line
-     (e.g. *"🔧 Write(notes.txt)"*, *"… thinking"*, *"running bun test"*). Keep it to one line.
+     (e.g. *"🔧 Write(notes.txt)"*, *"… thinking"*, *"running bun test"*). Keep it to one line. The user
+     is always up to date; they should NOT have to ask "status".
+   - **Question relay (TB_ASK):** if the screen (or `read_events` with `kinds: ["needs_user_input"]`) shows
+     a `TB_ASK: <question>` line, post the question to the channel: *"Claude is asking: `<q>`. Reply here
+     and I'll send it back."* **Block until the user replies.** Then `send_text` the user's reply into the
+     session (e.g. `{ "id", "text": "<reply>", "enter": true }`) and continue pumping. A `TB_ASK` reply is
+     NOT a turn boundary — claude may run more after receiving it. (If the user replies with "decide for
+     me" / "use your best judgment" / etc., forward that exact text — do not paraphrase; claude must see
+     the operator message verbatim so it can cite it.)
    - **Accept the plan WITH auto-accept (the key step).** When claude finishes planning it presents the plan
      and asks how to proceed — the menu typically offers *"1. Yes, and auto-accept edits"*, *"2. Yes, and
      manually approve edits"*, *"3. No, keep planning"*. `read_screen`, then pick the **auto-accept** option
