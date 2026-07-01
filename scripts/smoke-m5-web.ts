@@ -14,9 +14,9 @@ const base = `http://127.0.0.1:${PORT}`;
 const { server, manager } = startServer({ port: PORT, host: "127.0.0.1", token: TOKEN });
 
 async function tool<T>(name: string, args: Record<string, unknown>): Promise<T> {
-	const r = await fetch(`${base}/api/tool/${name}?token=${TOKEN}`, {
+	const r = await fetch(`${base}/api/tool/${name}`, {
 		method: "POST",
-		headers: { "content-type": "application/json" },
+		headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}` },
 		body: JSON.stringify(args),
 	});
 	const j = (await r.json()) as { ok: boolean; data?: unknown; error?: string };

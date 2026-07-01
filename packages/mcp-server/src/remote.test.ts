@@ -11,19 +11,27 @@ function stubFetch(
 }
 
 describe("createRemoteCaller", () => {
-	test("POSTs to /api/tool/:name?token= and returns inner data on outer ok", async () => {
-		let seen: { url: string; body: unknown } | undefined;
+	test("POSTs to /api/tool/:name with the token in the Authorization header (not the URL)", async () => {
+		let seen: { url: string; headers: Record<string, string>; body: unknown } | undefined;
 		const caller = createRemoteCaller({
 			serverUrl: "http://h:1",
 			token: "T",
 			fetchImpl: stubFetch((url, init) => {
-				seen = { url, body: JSON.parse(init.body as string) };
+				seen = {
+					url,
+					headers: init.headers as Record<string, string>,
+					body: JSON.parse(init.body as string),
+				};
 				return { body: { ok: true, data: { id: "s1" } } };
 			}),
 		});
 		const out = await caller("open_session", { env: "local" });
 		expect(out).toEqual({ id: "s1" });
-		expect(seen?.url).toBe("http://h:1/api/tool/open_session?token=T");
+		// Token MUST NOT appear in the URL (it would leak into access logs).
+		expect(seen?.url).toBe("http://h:1/api/tool/open_session");
+		expect(seen?.url).not.toContain("token=");
+		// Token MUST be carried in the Authorization: Bearer header.
+		expect(seen?.headers.authorization).toBe("Bearer T");
 		expect(seen?.body).toEqual({ env: "local" });
 	});
 

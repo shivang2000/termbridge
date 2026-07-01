@@ -19,6 +19,9 @@ describe("extractToken", () => {
 	test("from Authorization: Bearer", () => {
 		expect(extractToken("http://h/ws/1", "Bearer secret")).toBe("secret");
 	});
+	test("trims trailing whitespace around a Bearer token", () => {
+		expect(extractToken("http://h/ws/1", "  Bearer secret \t")).toBe("secret");
+	});
 	test("query wins over header", () => {
 		expect(extractToken("http://h/?token=q", "Bearer hdr")).toBe("q");
 	});
