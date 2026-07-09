@@ -1,0 +1,7 @@
+[1mWARNING: Bypass Permissions mode[0m
+
+In Bypass Permissions mode, Claude will not ask for your approval before
+running tools. This may be dangerous.
+
+  1. No, exit
+  2. Yes, I accept

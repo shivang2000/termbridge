@@ -1,0 +1,3 @@
+Browser didn't open? Use the URL below to sign in to Claude
+
+https://claude.ai/login/x

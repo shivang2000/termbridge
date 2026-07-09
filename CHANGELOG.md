@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+Recognizer screen fixture corpus + drift guard (roadmap P2.1).
+
+- **`packages/core/src/recognizers/__fixtures__/`** — positive-match screen captures per
+  recognizer (incl. live Claude Code 2.1.183 permission captures).
+- **`corpus.guard.test.ts`** — every `*.txt` fixture must still match its recognizer;
+  fails loudly with path + kind on TUI drift. Declarative DSL deferred.
+
 Live cloud `SandboxProvider` (E2B) — `env:"sandbox"` is now selectable end-to-end (roadmap P1.1).
 
 - **New `@termbridge/sandbox-e2b`** package: `E2BSandboxProvider implements SandboxProvider`

@@ -1,0 +1,4 @@
+Browser didn't open? Open this URL to sign in:
+https://claude.ai/oauth/authorize?x=1
+
+Paste code here if prompted >

@@ -93,13 +93,14 @@ loop end to end.
 
 ### Phase 2 — Medium term (reach + hardening)
 
-#### P2.1 — Recognizer re-tuning & version resilience 🔁
+#### P2.1 — Recognizer re-tuning & version resilience 🔁 (corpus ✅)
 **Why:** Recognizer patterns (`claude-permission`, `claude-activity`, `oauth-url`, `generic-yn`,
 `rate_limited`, `tb-marker`) track the Claude Code TUI and are **version-fragile by design**
 (isolated per module). As the TUI changes, recognizers must be re-tuned.
-**Scope (ongoing):**
-- Regression test corpus of screen captures per recognizer; alert on drift.
-- Optional: a pluggable/declarative recognizer spec so tuning is data, not code, where feasible.
+**Shipped:** screen fixture corpus under `packages/core/src/recognizers/__fixtures__/` +
+`corpus.guard.test.ts` (fails loudly on drift). Re-capture notes in `__fixtures__/README.md`.
+**Still ongoing:** re-tune when Claude Code TUI changes; optional declarative recognizer
+spec remains deferred (data-not-code where feasible, behind existing `Recognizer` API).
 
 #### P2.2 — npm publish of the remaining packages 🟡
 **Why:** `@termbridge/server` is published (M9); `@termbridge/mcp-server`/`core`/`orchestrator` are

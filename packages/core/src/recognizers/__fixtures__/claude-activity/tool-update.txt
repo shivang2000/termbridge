@@ -1,0 +1,3 @@
+I'll update the manifest now.
+● Update(package.json)
+  ⎿ Updating dependencies…

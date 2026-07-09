@@ -1,0 +1,4 @@
+Claude usage limit reached.
+
+Your limit will reset at 3:00 PM.
+
