@@ -1,46 +1,54 @@
-# Sandbox (cloud) integration — E2B
+# Sandbox providers (cloud)
 
-termbridge's `env:"sandbox"` runs a session's tmux INSIDE a cloud sandbox, behind
-the same `Environment` interface as `local`/`docker` (D4). A concrete provider ships
-in `@termbridge/sandbox-e2b` (E2B); Daytona/Cloudflare are future ports behind the
-same `SandboxProvider` interface.
+termbridge runs tmux **inside** a cloud sandbox via the pluggable `SandboxProvider`
+interface (D4). Core stays SDK-free; each provider is its own package.
 
-## Setup
+| Package | Backend | Status |
+|---|---|---|
+| `@termbridge/sandbox-e2b` | [E2B](https://e2b.dev) | ✅ live smoke proven; auto-wire with `E2B_API_KEY` |
+| `@termbridge/sandbox-daytona` | [Daytona](https://www.daytona.io) | ✅ unit-tested; inject `DaytonaClient` (map your SDK) |
+| `@termbridge/sandbox-cloudflare` | Cloudflare sandboxes | ✅ unit-tested; inject `CloudflareSandboxClient` |
 
-1. Get an E2B API key (`E2B_API_KEY`). The default `base` template is used; tmux is
-   installed on first `ensure` via passwordless `sudo` (E2B `base` user is non-root).
+## Shared contract
 
-2. **Turnkey (server / MCP):** set `E2B_API_KEY` in the process env. Both
-   `bunx @termbridge/server` and `npx @termbridge/mcp-server` auto-wire
-   `E2BSandboxProvider` when the key is present — then `open_session({ env: "sandbox" })`
-   works with no custom code.
-
-   ```bash
-   export E2B_API_KEY=e2b_…
-   bunx @termbridge/server
-   # or
-   TERMBRIDGE_TOKEN=… E2B_API_KEY=… npx -y @termbridge/mcp-server
-   ```
-
-3. **Library use:** wire the provider yourself (or use `sandboxProviderFromEnv()`):
-
-   ```ts
-   import { SessionManager } from "@termbridge/core";
-   import { E2BSandboxProvider, sandboxProviderFromEnv } from "@termbridge/sandbox-e2b";
-
-   const manager = new SessionManager({
-     sandboxProvider: sandboxProviderFromEnv() ?? new E2BSandboxProvider({ apiKey: "…" }),
-   });
-   const session = await manager.open({ env: "sandbox", cwd: "/root", cmd: "claude" });
-   ```
-
-4. If `env: "sandbox"` is requested with **no** provider configured, core throws
-   `sandbox_not_configured` (code) before any cloud call.
-
-## Live smoke (creds-gated)
-
-```bash
-E2B_API_KEY=... bun scripts/smoke-sandbox-e2b.ts
+```ts
+interface SandboxProvider {
+  readonly name: string;
+  ensure(opts: { name; cwd; image?; env? }): Promise<void>;
+  exec(args: string[]): Promise<ExecResult>; // never rejects on non-zero
+  destroy(): Promise<void>; // never throws
+}
 ```
 
-Without `E2B_API_KEY` the smoke no-ops and exits 0 (so `bun run test` stays green).
+Wire into the manager:
+
+```ts
+const manager = new SessionManager({
+  sandboxProvider: new E2BSandboxProvider({ /* or Daytona / Cloudflare */ }),
+});
+await manager.open({ env: "sandbox", cwd: "/home/user", cmd: "claude" });
+```
+
+## Daytona / Cloudflare clients
+
+Those packages do **not** hard-depend on vendor SDKs (keeps CI green without credentials).
+Implement the small client interface with your SDK of choice:
+
+```ts
+import { DaytonaSandboxProvider, type DaytonaClient } from "@termbridge/sandbox-daytona";
+
+const client: DaytonaClient = {
+  async create({ name, cwd, env }) { /* SDK create workspace */ return { id }; },
+  async exec(id, cmd) { /* SDK run shell */ return { exitCode, stdout, stderr }; },
+  async destroy(id) { /* SDK delete */ },
+};
+const provider = new DaytonaSandboxProvider({ client });
+```
+
+Same shape for `CloudflareSandboxClient`.
+
+## Live smoke (E2B only today)
+
+```bash
+E2B_API_KEY=… bun scripts/smoke-sandbox-e2b.ts
+```

@@ -59,8 +59,14 @@ export interface EngineerLoopOptions {
 	 * After acceptance is met, deliver the change: claude creates a branch + commits,
 	 * and (if `gh` is authenticated in the session) pushes + opens a PR. Default false
 	 * (the loop only edits+verifies); the CLI/skill enable it.
+	 * Prefer {@link delivery} for new code; `openPr: true` is sugar for `delivery: "gh-pr"`.
 	 */
 	openPr?: boolean;
+	/**
+	 * Delivery target after acceptance (Phase 3). `"gh-pr"` (default when openPr),
+	 * `"patch"` (raw unified patch markers), `"gerrit"`, `"none"`, or a custom strategy.
+	 */
+	delivery?: "gh-pr" | "patch" | "gerrit" | "none" | import("./delivery.js").DeliveryStrategy;
 	/** Branch to deliver on. Defaults to `tb/<slug of goal>`. */
 	branch?: string;
 	/** Force a draft PR. Otherwise the PR is "ready" only when {@link confirmPr} returns true. */
@@ -79,12 +85,14 @@ export interface EngineerLoopResult {
 	finalSummary: string;
 	testReport?: string;
 	sessionId: string;
-	/** What delivery produced: a PR, a pushed/committed branch, or nothing. */
-	delivery?: "pr" | "branch" | "none";
-	/** The opened PR URL (when delivery === "pr"). */
+	/** What delivery produced: a PR, a pushed/committed branch, a patch, or nothing. */
+	delivery?: "pr" | "branch" | "patch" | "none";
+	/** The opened PR / review URL (when delivery === "pr"). */
 	prUrl?: string;
 	/** The branch claude committed to (for host-side push/PR fallback). */
 	branch?: string;
+	/** Raw patch body or file path when delivery === "patch". */
+	patch?: string;
 }
 
 export interface AssessResult {

@@ -56,6 +56,7 @@ export function correctivePrompt(acceptance: string[], assessed: AssessResult): 
 
 /** Prompt sent AFTER acceptance is met to deliver the change (branch/commit/push/PR). */
 export function buildDeliveryPrompt(branch: string, draft: boolean): string {
+	// Keep in sync with ghPrDelivery in delivery.ts (back-compat export).
 	return [
 		`Deliver the change. Create a git branch \`${branch}\` and commit ALL your changes with a clear message referencing the goal.`,
 		"If git complains about identity, set it first: git config user.email and user.name.",

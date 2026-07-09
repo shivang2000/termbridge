@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+Phase 3 foundation — more sandbox providers, pluggable delivery, wake-on-event docs.
+
+- **`@termbridge/sandbox-daytona`** / **`@termbridge/sandbox-cloudflare`**: `SandboxProvider`
+  ports with injectable clients (no hard vendor SDK in CI); unit tests; orphan cleanup on
+  failed ensure.
+- **Orchestrator delivery strategies**: `delivery: "gh-pr" | "patch" | "gerrit"` (or custom
+  `DeliveryStrategy`); `openPr: true` remains sugar for `"gh-pr"`.
+- **Wake-on-event**: `packages/claude-code-plugin/WAKE-ON-EVENT.md` documents
+  `wait_for_event` host wake pattern.
+- Docs: `docs/integration/sandbox.md` multi-provider table.
+
 - **@termbridge/sandbox-e2b@1.0.8** published to npm (publisher confirmed); public registry
   metadata may lag for brand-new scoped packages — if `npm view` 404s, install from the
   monorepo or retry after npm indexes the package.

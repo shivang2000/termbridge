@@ -119,16 +119,18 @@ use + Hermes docs for caps / rate-limit backoff.
 
 ---
 
-### Phase 3 — Long term / exploratory 🔲 (optional — not required for v1 complete)
+### Phase 3 — Long term / exploratory 🔁 (foundation shipped)
 
-v1 substrate is complete without these. Ports and polish only:
+v1 substrate is complete without these; Phase 3 extends reach.
 
-- **Additional cloud providers** (Daytona, Cloudflare) behind the same `SandboxProvider` interface
-  (D4) — a port, not a rewrite.
-- **Wake-on-terminal-event ergonomics** in the Claude Code plugin (pi-interactive-shell
-  `triggerTurn`-style), deferred from M6/D3.
-- **Pluggable delivery targets** beyond `gh` PRs (e.g. Gerrit, raw patch) in the orchestrator.
-- **Contention / arbitration improvements** — currently manual human interrupt + advisory
+- **Additional cloud providers** ✅ foundation: `@termbridge/sandbox-daytona` +
+  `@termbridge/sandbox-cloudflare` (injectable clients, unit-tested; map vendor SDKs at the edge).
+  E2B remains the live-proven provider. See `docs/integration/sandbox.md`.
+- **Wake-on-terminal-event ergonomics** ✅ docs: `packages/claude-code-plugin/WAKE-ON-EVENT.md`
+  (`wait_for_event` wake pattern for host turns).
+- **Pluggable delivery targets** ✅: `delivery: "gh-pr" | "patch" | "gerrit"` (or custom
+  `DeliveryStrategy`) on `runEngineerLoop`; default remains gh-PR via `openPr: true`.
+- **Contention / arbitration improvements** 🔲 — still manual human interrupt + advisory
   `WriteLock`; revisit if real arbitration prior art emerges.
 
 ---

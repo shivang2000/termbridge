@@ -305,6 +305,29 @@ describe("engineer-loop delivery (branch → commit → push → PR)", () => {
 		expect(String(sent(draft.calls, "send_text")[1]?.args.text)).toContain("--draft");
 	});
 
+	test("delivery: 'patch' uses patch strategy and returns patch body", async () => {
+		const screen = [
+			"TB_BRANCH_READY: tb/patch-me",
+			"TB_PATCH_BEGIN",
+			"diff --git a/x b/x",
+			"+hi",
+			"TB_PATCH_END",
+		].join("\n");
+		const { tools, calls } = mockTools(deliveryScript(screen));
+		const res = await runEngineerLoop({
+			tools,
+			task: baseTask,
+			delivery: "patch",
+		});
+		expect(res.delivery).toBe("patch");
+		expect(res.branch).toBe("tb/patch-me");
+		expect(res.patch).toContain("diff --git");
+		const deliveryPrompt = sent(calls, "send_text").find((c) =>
+			String(c.args.text).includes("TB_PATCH_BEGIN"),
+		);
+		expect(deliveryPrompt).toBeDefined();
+	});
+
 	test("openPr defaults off — no delivery turn (back-compat)", async () => {
 		const { tools, calls } = mockTools({
 			idle: [{ idle: true }],

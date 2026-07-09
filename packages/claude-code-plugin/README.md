@@ -47,3 +47,8 @@ metered API**. Credentials are **not** bundled with this plugin: they come from 
 `HOME` volume (`~/.claude/.credentials.json`). Perform the one-time OAuth login once (via the
 `oauth-url` recognizer), persist `~/.claude/.credentials.json` on that volume, and every
 session that mounts the same `HOME` reuses it.
+
+## Wake-on-terminal-event (Phase 3)
+
+Prefer `wait_for_event` over busy polling so the host turn can sleep until a prompt or
+rate-limit appears. See **[WAKE-ON-EVENT.md](./WAKE-ON-EVENT.md)**.

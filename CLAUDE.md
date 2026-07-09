@@ -48,9 +48,11 @@ Packages: `@termbridge/core`, `@termbridge/mcp-server`, `@termbridge/server`,
 - Sandbox: set `E2B_API_KEY` → `env:sandbox` auto-wired in server/MCP.
 - **No detection-evasion.**
 
-## Next step (operator-only leftovers)
+## Next step
 
-1. **P1.4 live demo** — when idle: `hermes gateway restart`, DM bot, capture template in `docs/demo/`.
-2. **Phase 3 (optional):** Daytona/Cloudflare, wake-on-event, pluggable delivery, arbitration.
+1. **P1.4 live demo** (operator): when idle, `hermes gateway restart`, DM bot, capture in `docs/demo/`.
+2. **Phase 3** foundation shipped: Daytona/CF packages (inject SDK), delivery strategies, wake docs.
+   Remaining: live Daytona/CF smokes (creds), arbitration if needed.
+3. Map Daytona/CF SDKs to the injectable client interfaces when you have keys.
 
 To run: `bun install` → `bun run test`. Live E2B: `E2B_API_KEY=… bun scripts/smoke-sandbox-e2b.ts`.

@@ -21,8 +21,9 @@
 // "./engineer-loop.js"` (`index.ts`) see an unchanged API.
 
 import { approveIfBlocked } from "./approve.js";
-import { assess, parseAsk, parseBranch, parsePrUrl, slugify, summarizeProgress } from "./parse.js";
-import { buildDeliveryPrompt, buildEngineerPrompt, correctivePrompt } from "./prompt.js";
+import { resolveDelivery } from "./delivery.js";
+import { assess, parseAsk, slugify, summarizeProgress } from "./parse.js";
+import { buildEngineerPrompt, correctivePrompt } from "./prompt.js";
 import type {
 	EngineerLoopOptions,
 	EngineerLoopResult,
@@ -32,6 +33,16 @@ import type {
 	ScreenResult,
 } from "./types.js";
 
+export {
+	DELIVERY_STRATEGIES,
+	type DeliveryKind,
+	type DeliveryParseResult,
+	type DeliveryStrategy,
+	gerritDelivery,
+	ghPrDelivery,
+	patchDelivery,
+	resolveDelivery,
+} from "./delivery.js";
 // Re-export the full public surface so callers importing from
 // "./engineer-loop.js" (the test file) or via index.ts (`export * from
 // "./engineer-loop.js"`) see an unchanged API after the P1.3 split. The value
@@ -176,59 +187,71 @@ export async function runEngineerLoop(opts: EngineerLoopOptions): Promise<Engine
 		}
 	}
 
-	// Delivery: after acceptance is met, optionally branch → commit → push → PR.
-	// Opening a PR is an outward action, so it's gated: `confirmPr` true → ready PR,
-	// otherwise (declined / no human / prDraft) → draft. If gh isn't authenticated in
-	// the session, claude only commits a branch and the caller pushes + PRs on the host.
-	let delivery: "pr" | "branch" | "none" = "none";
+	// Delivery: after acceptance, run the selected strategy (default gh-pr when openPr).
+	// Opening a PR is outward-gated: confirmPr true → ready; else draft (gh-pr only).
+	let delivery: "pr" | "branch" | "patch" | "none" = "none";
 	let prUrl: string | undefined;
 	let deliveredBranch: string | undefined;
-	if (met && (opts.openPr ?? false)) {
+	let patch: string | undefined;
+	const strategy = resolveDelivery(opts.delivery ?? (opts.openPr ? "gh-pr" : undefined));
+	if (met && strategy) {
 		const ready = opts.prDraft ? false : opts.confirmPr ? await opts.confirmPr() : false;
 		const branch = opts.branch ?? `tb/${slugify(task.goal)}`;
 		deliveredBranch = branch;
-		log(`delivering on ${branch} (PR ${ready ? "ready" : "draft"})`);
-		await tools("send_text", { id, text: buildDeliveryPrompt(branch, !ready), enter: true });
-		let ticks = 0;
-		for (;;) {
-			if (ticks++ >= maxTurnTicks) {
-				break;
+		log(`delivering on ${branch} via ${strategy.id} (${ready ? "ready" : "draft"})`);
+		const prompt = strategy.buildPrompt(branch, { draft: !ready });
+		if (prompt) {
+			await tools("send_text", { id, text: prompt, enter: true });
+			let ticks = 0;
+			for (;;) {
+				if (ticks++ >= maxTurnTicks) {
+					break;
+				}
+				const idleRes = (await tools("wait_for_idle", {
+					id,
+					quietMs,
+					timeoutMs: cadenceMs,
+				})) as IdleResult;
+				const p = (await tools("read_progress", {
+					id,
+					sinceOffset: offset,
+				})) as ProgressResult;
+				offset = p.nextOffset ?? offset;
+				onDigest({
+					round: roundsRun,
+					phase: p.phase ?? null,
+					summary: summarizeProgress(p),
+					idle: !!idleRes.idle,
+				});
+				if (p.awaitingInput || p.phase === "awaiting_input") {
+					await tools("send_control", { id, key: "Enter" });
+					continue;
+				}
+				if (idleRes.idle) {
+					break;
+				}
 			}
-			const idleRes = (await tools("wait_for_idle", {
+			const { screen } = (await tools("read_screen", {
 				id,
-				quietMs,
-				timeoutMs: cadenceMs,
-			})) as IdleResult;
-			const p = (await tools("read_progress", { id, sinceOffset: offset })) as ProgressResult;
-			offset = p.nextOffset ?? offset;
-			onDigest({
-				round: roundsRun,
-				phase: p.phase ?? null,
-				summary: summarizeProgress(p),
-				idle: !!idleRes.idle,
-			});
-			if (p.awaitingInput || p.phase === "awaiting_input") {
-				await tools("send_control", { id, key: "Enter" });
-				continue;
-			}
-			if (idleRes.idle) {
-				break;
+				scrollback: 300,
+			})) as ScreenResult;
+			const parsed = strategy.parseResult(screen);
+			delivery = parsed.kind;
+			prUrl = parsed.prUrl;
+			patch = parsed.patch;
+			if (parsed.branch) {
+				deliveredBranch = parsed.branch;
 			}
 		}
-		const { screen } = (await tools("read_screen", { id, scrollback: 300 })) as ScreenResult;
-		prUrl = parsePrUrl(screen);
-		const br = parseBranch(screen);
-		if (br) {
-			deliveredBranch = br;
-		}
-		delivery = prUrl ? "pr" : br ? "branch" : "none";
 	}
 
 	const deliverySummary = prUrl
 		? ` → PR ${prUrl}`
-		: delivery === "branch"
-			? ` → branch ${deliveredBranch} (push + PR on host)`
-			: "";
+		: delivery === "patch"
+			? ` → patch on ${deliveredBranch ?? "branch"}`
+			: delivery === "branch"
+				? ` → branch ${deliveredBranch} (push + PR on host)`
+				: "";
 	const finalSummary = met
 		? `acceptance met after ${roundsRun} round(s)${deliverySummary}`
 		: `not met after ${roundsRun} round(s)${reason ? ` (claude: ${reason})` : ""}`;
@@ -243,5 +266,6 @@ export async function runEngineerLoop(opts: EngineerLoopOptions): Promise<Engine
 		delivery,
 		...(prUrl ? { prUrl } : {}),
 		...(deliveredBranch ? { branch: deliveredBranch } : {}),
+		...(patch ? { patch } : {}),
 	};
 }
