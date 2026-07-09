@@ -32,7 +32,7 @@ live Hermes drives). CI gates typecheck/lint/test on push/PR.
 | **M3** | `mcp-server` — 13-tool stdio MCP surface incl. `read_progress` | ✅ |
 | **M4** | Auth reuse + OAuth-URL bridging (log in to Claude *through* termbridge) | ✅ |
 | **M5** | Web bridge (xterm.js + Hono/Bun WS, live activity bar) + unified server | ✅ |
-| **M6** | `SandboxEnvironment` *interface* + `wait_for_event` + `claude-code-plugin` (live cloud deferred) | ✅ (🟡 live cloud) |
+| **M6** | `SandboxEnvironment` *interface* + `wait_for_event` + `claude-code-plugin` (+ live E2B via P1.1) | ✅ |
 | **M7** | `runEngineerLoop` (autonomous iterate-until-done loop + ~25s digests + PR delivery) | ✅ |
 | **M8** | Distribution (npm packages + Docker images + tag-triggered release pipeline) | ✅ |
 | **M9** | Browser watch for Hermes-driven sessions (MCP proxy mode + `setup.sh --watch`) | ✅ |

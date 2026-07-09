@@ -3,6 +3,7 @@
 
 import { randomUUID } from "node:crypto";
 import { SessionManager } from "@termbridge/core";
+import { sandboxProviderFromEnv } from "@termbridge/sandbox-e2b";
 import { createTermbridgeServer } from "./server.js";
 
 export type { Bridge, BridgeSessionView, ClientFrame, ServerFrame, WsLike } from "./bridge.js";
@@ -24,9 +25,15 @@ export interface StartOptions {
 	clientDir?: string;
 }
 
+/** Default manager: enables env:"sandbox" when E2B_API_KEY is set (P1.1). */
+function defaultManager(): SessionManager {
+	const sandboxProvider = sandboxProviderFromEnv();
+	return new SessionManager(sandboxProvider ? { sandboxProvider } : {});
+}
+
 /** Start the unified server. Returns the Bun server handle + the SessionManager + token. */
 export function startServer(opts: StartOptions = {}) {
-	const manager = opts.manager ?? new SessionManager();
+	const manager = opts.manager ?? defaultManager();
 	const port = opts.port ?? Number(process.env.PORT ?? 8787);
 	const host = opts.host ?? process.env.HOST ?? "127.0.0.1";
 	const token = opts.token ?? process.env.TERMBRIDGE_TOKEN ?? randomUUID();
@@ -54,7 +61,11 @@ export function startServer(opts: StartOptions = {}) {
 
 if (import.meta.main) {
 	const { port, host, token } = startServer();
+	const sandboxOn = Boolean(process.env.E2B_API_KEY);
 	console.error(`[termbridge] server on http://${host}:${port}  (token: ${token})`);
+	console.error(
+		`[termbridge] env:sandbox ${sandboxOn ? "enabled (E2B_API_KEY set)" : "disabled (set E2B_API_KEY to enable)"}`,
+	);
 	if (host !== "127.0.0.1" && host !== "localhost") {
 		console.error(
 			"[termbridge] WARNING: bound to a non-loopback address — exposed beyond this host.",

@@ -8,22 +8,34 @@ same `SandboxProvider` interface.
 ## Setup
 
 1. Get an E2B API key (`E2B_API_KEY`). The default `base` template is used; tmux is
-   installed on first `ensure` (it isn't pre-baked into `base`).
+   installed on first `ensure` via passwordless `sudo` (E2B `base` user is non-root).
 
-2. Wire the provider into the `SessionManager`:
+2. **Turnkey (server / MCP):** set `E2B_API_KEY` in the process env. Both
+   `bunx @termbridge/server` and `npx @termbridge/mcp-server` auto-wire
+   `E2BSandboxProvider` when the key is present — then `open_session({ env: "sandbox" })`
+   works with no custom code.
+
+   ```bash
+   export E2B_API_KEY=e2b_…
+   bunx @termbridge/server
+   # or
+   TERMBRIDGE_TOKEN=… E2B_API_KEY=… npx -y @termbridge/mcp-server
+   ```
+
+3. **Library use:** wire the provider yourself (or use `sandboxProviderFromEnv()`):
 
    ```ts
    import { SessionManager } from "@termbridge/core";
-   import { E2BSandboxProvider } from "@termbridge/sandbox-e2b";
+   import { E2BSandboxProvider, sandboxProviderFromEnv } from "@termbridge/sandbox-e2b";
 
    const manager = new SessionManager({
-     sandboxProvider: new E2BSandboxProvider({ apiKey: process.env.E2B_API_KEY }),
+     sandboxProvider: sandboxProviderFromEnv() ?? new E2BSandboxProvider({ apiKey: "…" }),
    });
    const session = await manager.open({ env: "sandbox", cwd: "/root", cmd: "claude" });
    ```
 
-3. Over MCP, `open_session` now accepts `env: "sandbox"`. If the server's manager
-   has no `sandboxProvider` configured, it throws `sandbox_not_configured`.
+4. If `env: "sandbox"` is requested with **no** provider configured, core throws
+   `sandbox_not_configured` (code) before any cloud call.
 
 ## Live smoke (creds-gated)
 

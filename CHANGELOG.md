@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+Server/MCP auto-wire `env:"sandbox"` when `E2B_API_KEY` is set (roadmap P1.1 finish).
+
+- **`sandboxProviderFromEnv()`** in `@termbridge/sandbox-e2b`.
+- **`@termbridge/server`** and **`@termbridge/mcp-server`** default managers enable
+  `E2BSandboxProvider` when the key is present (no custom wiring). Logs sandbox on/off at server start.
+
 Live E2B smoke proven + tmux install fix (roadmap P1.1).
 
 - **`E2BSandboxProvider.ensure`** installs tmux with `sudo -n apt-get` (E2B `base` user is

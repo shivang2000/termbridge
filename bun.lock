@@ -26,11 +26,12 @@
       "name": "@termbridge/mcp-server",
       "version": "1.0.6",
       "bin": {
-        "termbridge-mcp": "./src/stdio.ts",
+        "termbridge-mcp": "./src/bin.ts",
       },
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.29.0",
-        "@termbridge/core": "workspace:*",
+        "@termbridge/core": "^1.0.6",
+        "@termbridge/sandbox-e2b": "workspace:*",
         "zod": "^3.24.2",
       },
     },
@@ -40,7 +41,7 @@
     },
     "packages/sandbox-e2b": {
       "name": "@termbridge/sandbox-e2b",
-      "version": "0.0.0",
+      "version": "1.0.6",
       "dependencies": {
         "@termbridge/core": "workspace:*",
         "e2b": "^2.32.0",
@@ -56,6 +57,7 @@
         "@modelcontextprotocol/sdk": "^1.29.0",
         "@termbridge/core": "workspace:*",
         "@termbridge/mcp-server": "workspace:*",
+        "@termbridge/sandbox-e2b": "workspace:*",
         "hono": "^4.8.2",
         "zod": "^3.24.2",
       },

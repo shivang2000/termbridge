@@ -18,58 +18,45 @@ It generalizes two sibling repos: `~/dev/sentry-fixer-bot` (`alertforge`) = the 
 (xterm ↔ WS ↔ PTY + OAuth-URL bridge), and `~/dev/paperclip` = the agent↔execution-env half (adapters +
 E2B/Daytona/Cloudflare sandbox providers + workspace-runtime + MCP server).
 
-## Status (2026-06-21) — v1.0.0 (M1–M7 complete)
+## Status (2026-07-10) — M0–M9 + P1.1–P1.3 + P2.1/P2.3 build complete
 
-**M1–M6 + M7 complete; OPEN-SOURCE (MIT).** Built: `packages/core` (SessionManager/Session/Environment
-[Local/Docker/Sandbox]/PtyObserver/WriteLock/recognizers incl. **claude-activity**/AuthProvisioner +
-**docker-only env guard** `allowedEnvs`/`TERMBRIDGE_ALLOWED_ENVS`), `packages/mcp-server` (stdio, **13-tool**
-§6 surface incl. **read_progress**), `packages/server` (unified Bun+Hono: web WS bridge w/ live activity bar
-+ HTTP tool API, token-gated + loopback), `packages/orchestrator` (**runEngineerLoop** — consumer-side
-iterate-until-done loop, D8), `packages/claude-code-plugin`, `skills/engineer-loop/SKILL.md` (Hermes).
-~900 unit tests; real-tmux/Docker/MCP/web/auth/acceptance/concurrency/**engineer-loop**/Hermes-drive smokes
-green. PROVEN through real Hermes (gpt-5.5): single drive, real repo edit, parallel fleet, concurrency cap,
-and the engineering loop (claude fixed a failing test, host-verified). M7 = autonomous loop:
-Hermes→termbridge→claude→Discord with ~25s progress digests + test-gated completion. Pending: live
-cloud-sandbox provider (E2B, needs creds) and `npm publish` (gated — ask first). Web bridge uses tmux
-primitives, not node-pty (fails under Bun).
+**OPEN-SOURCE (MIT).** Packages: `@termbridge/core`, `@termbridge/mcp-server` (13-tool stdio),
+`@termbridge/server` (web WS + HTTP tools + streamable-HTTP `/mcp` + fleet `GET /api/sessions`),
+`@termbridge/orchestrator` (`runEngineerLoop`), `@termbridge/claude-code-plugin`,
+`@termbridge/sandbox-e2b` (live E2B smoke proven; auto-wired when `E2B_API_KEY` set).
+Recognizer fixture corpus + drift guard (P2.1). Fleet session list in web UI (P2.3).
 
 ## Decisions (D1–D8) — authority is `docs/superpowers/specs/2026-06-18-termbridge-design.md`
 
 1. **D1** Human↔agent share one session via **tmux substrate** (agent uses tmux CLI, never attaches; human `tmux attach`).
 2. **D2** Brand-new standalone repo (this one).
-3. **D3** **MCP-first**: build `core` lib → MCP server first; Claude Code plugin wrapper later.
-4. **D4** Isolation: **Local + Docker-per-session, user-selectable**; cloud sandbox later via same interface.
+3. **D3** **MCP-first**: build `core` lib → MCP server first; Claude Code plugin wrapper later. Core stays zero-runtime-deps.
+4. **D4** Isolation: **Local + Docker-per-session + sandbox (E2B)**; more cloud providers later via same interface.
 5. **D5** Control Claude Code by **piloting its TUI like a human** (send-keys/capture-pane) — no SDK/headless in v1.
-6. **D6** Read sync: **expect-style + idle** (`wait_for_text` + `wait_for_idle`) via a per-session PTY observer (`tmux pipe-pane -O`).
-7. **D7** **Pluggable recognizer registry** for prompts; ship `oauth-url` (port alertforge `url-detector.ts`), `claude-permission`, `generic-yn`.
-8. **D8** Scope = **primitives + auth + session registry only. NOT an orchestrator** (paperclip/hermes orchestrate).
+6. **D6** Read sync: **expect-style + idle** via per-session PTY observer (`tmux pipe-pane -O`).
+7. **D7** **Pluggable recognizer registry** for prompts.
+8. **D8** Scope = **primitives + auth + session registry only. NOT an orchestrator**.
 
 ## Doc map
 
-- `docs/superpowers/specs/2026-06-18-termbridge-design.md` — **the v1 spec (authority)**.
-- `docs/sessions/2026-06-18-research-and-design-session.md` — full session record (goal, method, findings, decision log).
-- `docs/PLAN.md` · `docs/ARCHITECTURE.md` · `docs/RESEARCH.md` · `docs/DECISIONS.md` — background.
-- `README.md` — overview + planned package layout.
+- `docs/ROADMAP.md` — forward plan (status legend).
+- `docs/superpowers/specs/2026-06-18-termbridge-design.md` — v1 spec (authority).
+- `docs/demo/hermes-demo.md` — Hermes live demo runbook (operator-gated restart).
+- `docs/integration/sandbox.md` — E2B setup.
 
-## Key facts to remember
+## Key facts
 
-- **Stack:** Bun (package manager + workspaces + test runner) + Turbo (task pipeline) + Biome + TypeScript — **no pnpm**.
-- Reuse from alertforge: `apps/server/src/chat/{pty-runner,url-detector}.ts`, `apps/server/src/routes/chat-ws.ts`,
-  `apps/web/src/components/{xterm-panel,chat-terminal}.tsx`. **Upgrade `script(1)` → `node-pty`** for live resize.
-- Reuse from paperclip: adapter/provider pattern (`packages/adapter-utils/src/types.ts`), sandbox providers
-  (`packages/plugins/sandbox-providers/{e2b,daytona,cloudflare}`), `packages/mcp-server` layout.
-- Auth: persist `~/.claude/.credentials.json` on a volume; one-time OAuth login via recognizer; all sessions reuse → subscription not API.
-- Caveat: fleet use of a subscription CLI may hit plan rate limits / automated-use terms → cap concurrency.
-- Repo: `github.com/shivang2000/termbridge` (OPEN-SOURCE, MIT; account `shivang2000`). npm publish still gated.
+- **Stack:** Bun + Turbo + Biome + TypeScript — **no pnpm**.
+- Auth: `~/.claude/.credentials.json` on a volume; OAuth via recognizer; subscription not API.
+- Fleet: cap with `TERMBRIDGE_MAX_SESSIONS`; observe via `GET /api/sessions` / web session list.
+- **No detection-evasion.** Ask before `npm publish`.
 
 ## Next step
 
-v0.1.1 shipped + M7 (engineer-loop) complete. **To finish the live Discord demo:** `hermes gateway
-restart` (config already wired `TERMBRIDGE_ALLOWED_ENVS=docker` + `MAX_SESSIONS=3`; backup
-`~/.hermes/config.yaml.bak-pre-m7`) — restart kills running agents, so operator-gated — then DM the bot a
-coding task to exercise the `engineer-loop` skill. Remaining/optional: ship a concrete cloud
-`SandboxProvider` (E2B — needs `E2B_API_KEY`); streamable-HTTP MCP transport on `packages/server` (so MCP
-clients like Hermes can share the server's registry → browser can watch *their* sessions); factor
-`packages/orchestrator` further; ask before `npm publish`. To run: `bun install` → `bun run test` → README
-Quickstart. Smokes: `scripts/{accept-final,smoke-engineer-loop,smoke-concurrency}.ts` (Docker, reuse
-`~/.termbridge/home` creds).
+**Build for Phase 1–2 is done** (demo deferred). Remaining operator/gated:
+
+1. **P1.4 live demo** — when idle: `hermes gateway restart`, DM bot, fill capture template in `docs/demo/`.
+2. **P2.2 publish** — owner sign-off, then tag / `bun scripts/publish-npm.ts` (includes `sandbox-e2b`).
+3. **Phase 3 (optional):** Daytona/Cloudflare providers, wake-on-event plugin, pluggable delivery, arbitration.
+
+To run: `bun install` → `bun run test`. Live E2B: `E2B_API_KEY=… bun scripts/smoke-sandbox-e2b.ts`.
