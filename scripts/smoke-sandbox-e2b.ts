@@ -30,7 +30,15 @@ async function main() {
 	try {
 		const session = await manager.open({ env: "sandbox", cwd: "/home/user", cmd: "bash" });
 		id = session.id;
-		console.log(`[smoke] opened sandbox session id=${id} (provider=${provider.name})`);
+		const cloudId = provider.sandboxId;
+		console.log(
+			`[smoke] opened sandbox session id=${id} (provider=${provider.name}` +
+				(cloudId ? `, e2bSandboxId=${cloudId}` : "") +
+				")",
+		);
+		if (cloudId) {
+			console.log(`[smoke] → watch this id on the E2B dashboard, then it should disappear after destroy`);
+		}
 		assert(
 			manager.list().some((s) => s.id === id),
 			"sandbox session is in the manager's registry",
@@ -69,11 +77,53 @@ async function main() {
 		}
 		// Always kill the cloud sandbox (covers open-failed-after-ensure, close
 		// missed destroy, and success path double-destroy which is a no-op).
+		// Capture id BEFORE destroy (destroy clears the handle).
+		const cloudIdBeforeKill = provider.sandboxId;
 		try {
 			await provider.destroy();
-			console.log("[smoke] finally: provider.destroy (sandbox killed)");
+			console.log(
+				`[smoke] finally: provider.destroy (sandbox killed${
+					cloudIdBeforeKill ? `: ${cloudIdBeforeKill}` : ""
+				})`,
+			);
 		} catch {
 			/* destroy must never throw */
+		}
+		// Verify via list API that nothing termbridge-owned is still running.
+		try {
+			const { Sandbox } = await import("e2b");
+			const pager = Sandbox.list({ apiKey: env.E2B_API_KEY });
+			const items = await pager.nextItems();
+			const still = items.filter(
+				(s) =>
+					s.state === "running" ||
+					(s.metadata && typeof s.metadata === "object" && "name" in s.metadata),
+			);
+			if (still.length === 0) {
+				console.log("[smoke] finally: E2B list shows 0 running sandboxes ✓");
+			} else {
+				console.error(
+					`[smoke] finally: WARNING — still listed after destroy: ${still
+						.map((s) => `${s.sandboxId}(${s.state})`)
+						.join(", ")}`,
+				);
+				for (const s of still) {
+					try {
+						await Sandbox.kill(s.sandboxId, { apiKey: env.E2B_API_KEY });
+						console.log(`[smoke] finally: force-killed ${s.sandboxId}`);
+					} catch (e) {
+						console.error(
+							`[smoke] finally: force-kill failed ${s.sandboxId}: ${
+								e instanceof Error ? e.message : e
+							}`,
+						);
+					}
+				}
+			}
+		} catch (e) {
+			console.error(
+				`[smoke] finally: list verify skipped: ${e instanceof Error ? e.message : e}`,
+			);
 		}
 	}
 	process.exit(ok ? 0 : 1);

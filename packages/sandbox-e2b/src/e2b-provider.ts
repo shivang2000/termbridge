@@ -134,10 +134,25 @@ export class E2BSandboxProvider implements SandboxProvider {
 		const sb = this.sandbox;
 		this.sandbox = undefined;
 		if (!sb) return;
+		const id = sb.sandboxId;
+		// Prefer instance kill, then static Sandbox.kill as a belt-and-suspenders
+		// path so a hung instance handle cannot leave a dashboard orphan.
 		try {
 			await sb.kill();
 		} catch {
-			// Swallow: destroy must never throw (mirrors SandboxEnvironment.destroySession).
+			/* try static kill below */
 		}
+		if (id) {
+			try {
+				await Sandbox.kill(id, this.apiKey ? { apiKey: this.apiKey } : undefined);
+			} catch {
+				// Swallow: destroy must never throw (mirrors SandboxEnvironment.destroySession).
+			}
+		}
+	}
+
+	/** Cloud sandbox id if one is currently provisioned (for smoke/logging). */
+	get sandboxId(): string | undefined {
+		return this.sandbox?.sandboxId;
 	}
 }
