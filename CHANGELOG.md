@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+Hermes live-demo runbook polish (roadmap P1.4 — live gateway restart still operator-gated).
+
+- `docs/demo/hermes-demo.md`: post-restart checklist, auth story, `--watch` ops, Discord checks,
+  capture template. `jira-ticket-prompt.md`: portable field checklist + setup flags.
+
 npm publish prep for `@termbridge/sandbox-e2b` (roadmap P2.2 — **not published yet**).
 
 - Package is publish-ready (`files: dist`, `publishConfig`, public access); included in

@@ -80,14 +80,16 @@ helpers + sentinels), `prompt.ts` (prompt builders), and `approve.ts` (in-sessio
 `engineer-loop.ts` is now the ~250-line loop driver and re-exports the full public surface so the
 test file and package barrel are byte-for-byte unchanged (regression proof). 26 orchestrator tests green.
 
-#### P1.4 — Discord / Hermes live demo finish 🔲
+#### P1.4 — Discord / Hermes live demo finish 🟡 (runbook ✅ · live demo operator-gated)
 **Why:** The engineer-loop + `engineer-loop` skill + `setup.sh --watch` are built; the remaining
 step is operator-gated (`hermes gateway restart` kills running agents) to exercise the chat-driven
 loop end to end.
-**Scope:**
+**Prep shipped:** `docs/demo/hermes-demo.md` + `jira-ticket-prompt.md` — post-restart checklist,
+auth story (API key vs subscription volume), `--watch` ops, Discord checks, capture template.
+**Still operator-gated:**
 - Restart the Hermes gateway (config already wired: `TERMBRIDGE_ALLOWED_ENVS=docker` +
   `MAX_SESSIONS=3`; backup `~/.hermes/config.yaml.bak-pre-m7`).
-- DM the bot a coding task; capture the demo walkthrough for `docs/demo/`.
+- DM the bot a coding task; fill the capture template in `docs/demo/`.
 
 ---
 

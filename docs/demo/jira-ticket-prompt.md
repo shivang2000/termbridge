@@ -1,11 +1,29 @@
 # Hermes prompt — fix a Jira ticket via termbridge (ticket → Claude → PR)
 
-Paste one of these to your Hermes work-agent **after** `setup.sh --mode local` + `hermes gateway restart`.
+Paste one of these to your Hermes work-agent **after**
+`setup.sh --mode local --api-key … --gh-token … --watch` + `hermes gateway restart`.
+
 Hermes opens a termbridge session running your host `claude`, and **Claude itself fetches the ticket via its
 own Jira MCP** (Hermes does not need a Jira tool) — then plans, implements, verifies, and opens the PR.
 
 > Local mode runs `claude` on the host with your **real HOME**, so your `claude` login *and your configured
 > MCPs (Jira, GitHub, …) are available inside the session*. That's why Claude — not Hermes — fetches the ticket.
+> If Jira MCP is missing in host `~/.claude`, paste the ticket body into the goal instead of "fetch via Jira".
+
+With `--watch`, expect the bot/skill to post a per-session
+`http://127.0.0.1:PORT/?session=<id>&token=…` URL — open it to watch the live TUI.
+
+---
+
+## Fields to replace (portable checklist)
+
+| Field | Example |
+|---|---|
+| Bot handle | `@hermes-work-agent` |
+| Absolute repo path | `/Users/you/dev/my-app` |
+| Jira key | `TRES-5517` |
+| Fast verify | `npm run lint && npm run typecheck` |
+| Scope skips | "ignore backend point 1; frontend only" |
 
 ---
 
@@ -26,6 +44,7 @@ DO:
   the verify command passes.
 - Post a short progress update to this channel every ~25s (read_progress).
 - When verify passes, have Claude commit a branch and open a PR; post the PR link. (No need to ask me.)
+- If TERMBRIDGE_SERVER_URL is set, post the browser watch URL for this session.
 
 DO NOT:
 - <points to skip>. Don't touch backend code or any other repo.
@@ -35,7 +54,10 @@ DO NOT:
 
 ---
 
-## Filled — TRES-5517 (frontend), auto-PR (no reply needed)
+## Filled — TRES-5517 (frontend), auto-PR (worked example — replace the three host-specific fields)
+
+> Host-specific: bot handle `@hermes-work-agent`, repo
+> `/Users/shivang/dev/GitHub/developer-portal-ui`, ticket `TRES-5517`. Copy the template above for other machines.
 
 ```
 @hermes-work-agent use the termbridge MCP + the engineer-loop skill.
@@ -68,10 +90,12 @@ DO NOT:
 
 ## Notes / gotchas (learned from a live run)
 
+- **Setup flags on macOS:** use `--api-key` + `--gh-token` (and `--watch` for browser co-drive). Plain
+  `setup.sh --mode local` without tokens often stalls on Keychain.
 - **Local mode = your host `claude`.** It uses your real `~/.claude` — login + MCPs (Jira, etc.). If a
-  session shows a login prompt, run `claude` once on the host and sign in.
+  session shows a login prompt, run `claude` once on the host and sign in (or pass `--api-key`).
 - **Hermes has no Jira tool** in this setup — that's intentional. Claude fetches the ticket; Hermes just
   drives Claude via the termbridge tools and relays progress.
 - If Claude reports *"binary missing at `~/.termbridge/home/.local/bin/claude`"*, your MCP was registered
   with `TERMBRIDGE_HOME` (the docker creds volume) which breaks local mode. Re-run
-  `setup.sh --mode local` (it now registers local **without** `TERMBRIDGE_HOME`), then `hermes gateway restart`.
+  `setup.sh --mode local` (it registers local **without** `TERMBRIDGE_HOME`), then `hermes gateway restart`.

@@ -9,6 +9,21 @@ their login + MCPs like Jira, host `git`/`gh`). Docker mode notes at the end.
 > **Run everything on the machine that has the Hermes gateway + the target repo.** `setup.sh`, `hermes …`,
 > and the repo all live there. (Each machine has its own `~/.hermes`; the skill is a local copy.)
 
+> **Operator gate:** `hermes gateway restart` **kills running agents**. Do it only when idle. This runbook
+> prepares everything; the restart itself is a human action (P1.4).
+
+---
+
+## Auth story (read once)
+
+| Mode | How Claude bills | Why tokens |
+|---|---|---|
+| **local + `--api-key`** (this demo) | API key in the session env (gateway cannot read macOS Keychain) | Reliable demo; not the “subscription volume” path |
+| **docker + `TERMBRIDGE_HOME` creds** | Shared `~/.claude` file-creds volume → **subscription** | No Keychain; true “subscription not metered API” story |
+| **local without API key** | Host Keychain login | Often fails for gateway-spawned processes on macOS |
+
+Demo default is **local + API key** for reliability. Call out docker+creds when you want the subscription pitch.
+
 ---
 
 ## Pre-flight (one-time, ~5 min) — two tokens beat the macOS Keychain
@@ -23,6 +38,7 @@ logged in" / "gh auth invalid". Passing tokens via env sidesteps the Keychain en
 - [ ] **Target repo cloned** at a known path, deps installed (`npm install`).
 - [ ] **A small, fast ticket** + a **fast verify** (lint / typecheck / one test file — not the whole suite).
 - [ ] **Default tmux is safe** — termbridge only uses `tmux -L termbridge`; your real tmux is never touched.
+- [ ] **Discord (if demoing there):** bot online, correct channel/permissions, you can see bot messages.
 
 ---
 
@@ -41,11 +57,24 @@ hermes gateway restart
 > no docker image, no creds volume); it forwards the API key + your gh token into each session. `--help`
 > lists flags. The skill install is included — no separate step.
 
+### Post-restart verification checklist (operator)
+
+Do these **after** `hermes gateway restart`, before DMing the bot:
+
+- [ ] `hermes mcp test termbridge` (or list tools) — expect the **13-tool** surface.
+- [ ] Skill present: `engineer-loop` installed (setup installs from the raw GitHub skill URL).
+- [ ] **Watch server up** (only if `--watch`):
+  - `cat ~/.termbridge/watch.json` → port + token
+  - `test -f ~/.termbridge/watch.pid && ps -p "$(cat ~/.termbridge/watch.pid)"` → process alive
+  - Open base URL `http://127.0.0.1:<PORT>/?token=…` (session list empty until a session opens)
+  - Log: `tail -n 50 ~/.termbridge/watch.log` if something looks down
+- [ ] Re-run setup if watch is dead — it kills the previous pid and starts a fresh server.
+
 ---
 
 ## 2. The live run
 
-**Paste to the bot:**
+**Paste to the bot** (replace fields — full template: [`jira-ticket-prompt.md`](jira-ticket-prompt.md)):
 ```
 @hermes-work-agent use the termbridge MCP + the engineer-loop skill.
 Open a termbridge session — env: local, cwd: <ABS REPO PATH> — running claude.
@@ -56,7 +85,6 @@ DO: approve the plan once (auto-accept); iterate until verify passes; ~25s progr
     when verify passes, commit a branch and open a PR in-session via gh; post the link. (No need to ask.)
 DO NOT: touch out-of-scope/backend code, other repos, unrelated files/deps/CI.
 ```
-(Full template: [`docs/demo/jira-ticket-prompt.md`](jira-ticket-prompt.md).)
 
 **Beats the audience sees:**
 1. **Session opens; Claude fetches the ticket** via its Jira MCP.
@@ -69,9 +97,14 @@ DO NOT: touch out-of-scope/backend code, other repos, unrelated files/deps/CI.
 
 **Watch in the browser** (with `--watch`): setup starts `bunx @termbridge/server` on the host and the bot
 posts a per-session `http://127.0.0.1:PORT/?session=<id>&token=…` URL in chat — open it to watch the live
-pane + activity bar; **type to take over** (the in-session auto-approver pauses while you drive). Loopback
-+ token; local mode only. Without `--watch`, use `tmux -L termbridge attach -r -t <name>` as the no-server
-fallback (`-r` = read-only).
+pane + activity bar + **session list** (`N/max`); **type to take over** (the in-session auto-approver pauses
+while you drive). Loopback + token; local mode only. Without `--watch`, use
+`tmux -L termbridge attach -r -t <name>` as the no-server fallback (`-r` = read-only).
+
+**Discord-specific (optional):**
+- [ ] Progress digests appear in the channel (~25s).
+- [ ] Watch URL is posted and openable from the demo machine.
+- [ ] Final PR link is posted and openable.
 
 ---
 
@@ -81,8 +114,8 @@ fallback (`-r` = read-only).
 - **Real repo, real PR** — "actual code, a real PR on our repo — not a sandbox toy."
 - **Jira by Claude** — "Hermes doesn't need a Jira tool; Claude fetches the ticket with its own MCP."
 - **Scoped** — "I told it to ignore the backend point — it skipped it and only did the frontend."
-- **Human-in-the-loop** — "I can `tmux attach` and take over the live session anytime."
-- **Fleet** — "this is one agent; an orchestrator can run many in parallel."
+- **Human-in-the-loop** — "open the browser watch URL (or `tmux attach`) and take over anytime."
+- **Fleet** — "this is one agent; an orchestrator can run many in parallel (cap with `TERMBRIDGE_MAX_SESSIONS`)."
 
 ---
 
@@ -110,8 +143,32 @@ tmux -L termbridge kill-server 2>/dev/null || true   # ONLY the -L termbridge so
 
 ---
 
+## 6. Capture template (close P1.4 after a live run)
+
+Fill after a successful demo; drop into this folder or the session notes:
+
+```
+Date:
+Mode: local + --watch | docker
+Bot handle:
+Repo path:
+Ticket:
+Verify command:
+Session id (redacted ok):
+PR URL (redact org if needed):
+Watch URL worked? Y/N
+Failures / recovery notes:
+```
+
+---
+
 ## Docker mode (isolated — for the "untrusted/shared bot" framing)
 
 `--mode docker` runs each session in a container (repo bind-mounted) using the shared creds volume +
-`shivang2000/termbridge-sandbox` image — no host Keychain involved, so subscription login works via the
-file-creds volume. Forward `GH_TOKEN`/`--gh-token` for in-container PRs. Everything else in the run is identical.
+`shivang2000/termbridge-sandbox` image — no host Keychain involved, so **subscription login works via the
+file-creds volume**. Typical env: `TERMBRIDGE_ALLOWED_ENVS=docker`, `TERMBRIDGE_MAX_SESSIONS=3`,
+`TERMBRIDGE_HOME=~/.termbridge/home`. Forward `GH_TOKEN`/`--gh-token` for in-container PRs.
+
+Prompt change: use `env: docker` and an absolute host path that is bind-mounted into the container.
+Everything else in the run is identical. Browser `--watch` is **local-mode only** today; docker demos use
+`tmux -L termbridge attach -r` for co-watch.
