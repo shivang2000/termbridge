@@ -130,7 +130,9 @@ failing test, host-verified). ~900 unit tests; real tmux / Docker / MCP / web (P
 concurrency / engineer-loop / docker-only-guard / Hermes smokes all green; CI gates typecheck+lint+test.
 Published image: `shivang2000/termbridge:1.0.1` (+ `:latest`). See [CHANGELOG](CHANGELOG.md).
 
-Optional/not-yet-shipped: a concrete cloud sandbox provider (E2B — needs creds).
+Optional: a live cloud sandbox smoke (`scripts/smoke-sandbox-e2b.ts`) — the `@termbridge/sandbox-e2b`
+provider + `env:"sandbox"` selection now ship (P1.1); only the **live** smoke is pending `E2B_API_KEY`
+creds (it no-ops without them). See [Sandbox integration](docs/integration/sandbox.md).
 
 The unified server now also speaks the **MCP streamable-HTTP transport** at `POST/GET/DELETE /mcp`
 (P1.2) — token-gated exactly like `/api/tool`. MCP clients (Hermes, Claude Code, Cursor) can connect

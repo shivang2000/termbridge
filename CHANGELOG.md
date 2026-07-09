@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+Live cloud `SandboxProvider` (E2B) — `env:"sandbox"` is now selectable end-to-end (roadmap P1.1).
+
+- **New `@termbridge/sandbox-e2b`** package: `E2BSandboxProvider implements SandboxProvider`
+  against the E2B SDK. One provider instance provisions/execs/destroys exactly one E2B
+  sandbox (one sandbox == one session). `exec` maps the argv to the SDK's `commands.run`,
+  shell-quotes each arg, and catches `CommandExitError` so non-zero exits return as data
+  (never reject) — matching the `ExecFn` contract. tmux is installed on `ensure` (the
+  default `base` template lacks it). Every SDK call is behind an injectable
+  `sandboxFactory` so unit tests never touch the cloud.
+- **`SessionManager` gains a `sandboxProvider?: SandboxProvider` option.** With it set,
+  `env:"sandbox"` selects `SandboxEnvironment`; without it, `env:"sandbox"` throws a
+  typed `SandboxProviderNotConfiguredError` (code `sandbox_not_configured`) BEFORE any
+  sandbox spawns. Core stays dependency-free (D3) — only the new package imports `e2b`.
+- **MCP `open_session` enum** is now `local | docker | sandbox`.
+- Smoke: `scripts/smoke-sandbox-e2b.ts` (creds-gated; no-ops without `E2B_API_KEY`).
+- **Non-goal:** multi-provider fan-out (E2B first; Daytona/Cloudflare are Phase 3 ports).
+
 Streamable-HTTP MCP transport on the unified server (roadmap P1.2).
 
 - **`@termbridge/server` now speaks MCP over HTTP** at `POST/GET/DELETE /mcp` (the spec's

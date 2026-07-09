@@ -20,6 +20,7 @@ Run on the host; most need the `termbridge:dev` image and creds at `~/.termbridg
 |---|---|
 | `bun scripts/smoke-env-guard.ts` | docker-only guard rejects `env:local` over real stdio (no docker/creds needed) |
 | `bun scripts/smoke-concurrency.ts` | race-safe concurrency cap + per-session isolation (real docker) |
+| `bun scripts/smoke-sandbox-e2b.ts` | live cloud sandbox (E2B): a sandbox session is opened/driven/closed over the real provider (creds-gated — no-ops without `E2B_API_KEY`) |
 | `bun scripts/smoke-mcp-http.ts` | streamable-HTTP MCP transport (`/mcp`): a real HTTP MCP client drives a local tmux session + asserts it lands in the server's shared registry (needs tmux) |
 | `bun scripts/smoke-engineer-loop.ts` | the engineering loop drives real claude to fix a failing test |
 | `bun scripts/accept-final.ts` | full acceptance: agent edits a bound repo via real claude, human co-present |
