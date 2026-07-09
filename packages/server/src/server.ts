@@ -55,6 +55,48 @@ export function createTermbridgeServer(opts: TermbridgeServerOptions): Termbridg
 
 	app.get("/healthz", (c) => c.json({ ok: true, tools: tools.names }));
 
+	// Fleet inventory (P2.3) — capacity + per-session holder/activity. Token-gated.
+	// MCP list_sessions stays the thin lifecycle snapshot; this endpoint enriches
+	// for operators (web UI) without inventing new core state.
+	const IDLE_MS = 5_000;
+	app.get("/api/sessions", (c) => {
+		if (!isAuthorized({ token, url: c.req.url, authHeader: c.req.header("authorization") })) {
+			return c.json({ ok: false, error: "unauthorized" }, 401);
+		}
+		const cap =
+			typeof manager.capacity === "function"
+				? manager.capacity()
+				: { maxSessions: 0, count: manager.list().length };
+		const now = Date.now();
+		const sessions = manager.list().map((info) => {
+			const session = manager.get(info.id);
+			const lock = session?.lockState?.() ?? "agent";
+			const holder = lock === "human-active" ? "human" : "agent";
+			const lastActivityAt = session?.lastActivityAt?.() ?? 0;
+			const status =
+				holder === "human"
+					? "human-takeover"
+					: now - lastActivityAt < IDLE_MS
+						? "driving"
+						: "idle";
+			return {
+				id: info.id,
+				name: info.name,
+				env: info.env,
+				state: info.state,
+				holder,
+				lastActivityAt,
+				status,
+			};
+		});
+		return c.json({
+			ok: true,
+			maxSessions: cap.maxSessions,
+			count: cap.count,
+			sessions,
+		});
+	});
+
 	// Agent-facing §6 tool surface (open_session, send_text, …) over HTTP — token-gated.
 	app.post("/api/tool/:name", async (c) => {
 		if (!isAuthorized({ token, url: c.req.url, authHeader: c.req.header("authorization") })) {

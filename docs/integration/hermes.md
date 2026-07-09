@@ -137,9 +137,12 @@ the live browser view (the unified server) and **type to take over** at any poin
   `human_took_over`.
 - **The same loop without a clone / without chat:** `@termbridge/orchestrator`'s `runEngineerLoop`, or the
   CLI `scripts/engineer.ts` against a running server — see the README "Walkthrough".
-- **Published on npm:** `@termbridge/core`, `@termbridge/mcp-server`, `@termbridge/orchestrator` (latest: 1.0.4).
-  The MCP server runs via `npx -y @termbridge/mcp-server` (no clone). To build your own loop, depend on
-  `@termbridge/orchestrator`.
+- **Published on npm:** `@termbridge/core`, `@termbridge/mcp-server`, `@termbridge/orchestrator`,
+  `@termbridge/server` (latest: 1.0.6). The MCP server runs via `npx -y @termbridge/mcp-server` (no clone).
+  To build your own loop, depend on `@termbridge/orchestrator`. Browser watch: `bunx @termbridge/server`
+  (or `setup.sh --watch`).
 - **Safety/limits:** keep `TERMBRIDGE_ALLOWED_ENVS=docker` and a low `TERMBRIDGE_MAX_SESSIONS`.
   Auto-approval presses through every prompt inside the container — the container is the isolation. Fleet
-  use of a subscription may hit plan limits / terms; cap concurrency.
+  use of a subscription may hit plan limits / terms; cap concurrency. Watch utilization via the web UI
+  session list or `GET /api/sessions` on the unified server (`count`/`maxSessions`, per-session
+  `idle`|`driving`|`human-takeover`). On `rate_limited` events, back off — do not open more sessions.

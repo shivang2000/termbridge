@@ -87,6 +87,14 @@ describe("SessionManager.open / lifecycle", () => {
 		expect(list[0]?.id).toBe("id1");
 	});
 
+	test("capacity reports maxSessions and registered count", async () => {
+		const { manager } = build(4);
+		expect(manager.capacity()).toEqual({ maxSessions: 4, count: 0 });
+		await manager.open();
+		await manager.open();
+		expect(manager.capacity()).toEqual({ maxSessions: 4, count: 2 });
+	});
+
 	test("open materializes the tmux session and wires pipe-pane", async () => {
 		const { manager, made } = build();
 		await manager.open({ cwd: "/work", cmd: "claude" });

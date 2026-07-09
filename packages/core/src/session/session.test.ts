@@ -314,6 +314,17 @@ describe("Session — web bridge surface (M5)", () => {
 		expect(await session.sendText("x")).toEqual({ ok: false, error: "human_driving" });
 	});
 
+	test("lockState reflects the WriteLock holder", () => {
+		const clock = makeClock(0);
+		const writeLock = new WriteLock({ clock: clock.clock, ttlMs: 3000 });
+		const { session } = build({ writeLock, clock: clock.clock });
+		expect(session.lockState()).toBe("agent");
+		session.noteHumanActivity();
+		expect(session.lockState()).toBe("human-active");
+		clock.advance(4000);
+		expect(session.lockState()).toBe("agent");
+	});
+
 	test("onOutput receives observer chunks and unsubscribes", () => {
 		const observer = new PtyObserver({ clock: makeClock(0).clock });
 		const { session } = build({ observer });

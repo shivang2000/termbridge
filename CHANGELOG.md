@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+Fleet observability (roadmap P2.3).
+
+- **`GET /api/sessions`** (token-gated): `maxSessions`/`count` plus per-session `holder`
+  (`agent`|`human`), `lastActivityAt`, and derived `status` (`idle`|`driving`|`human-takeover`).
+- **Core:** `Session.lockState()` and `SessionManager.capacity()` (no new state machines).
+- **Web client:** live session list panel (`N/max`, status badges, click to switch session).
+- Docs: Responsible use + Hermes safety/limits.
+
 Recognizer screen fixture corpus + drift guard (roadmap P2.1).
 
 - **`packages/core/src/recognizers/__fixtures__/`** — positive-match screen captures per

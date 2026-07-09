@@ -22,6 +22,7 @@ import type {
 	SendOptions,
 	SendResult,
 	WaitTextResult,
+	WriteLockState,
 } from "../types.js";
 import type { WriteLock } from "./write-lock.js";
 
@@ -151,6 +152,14 @@ export class Session {
 	 */
 	noteHumanActivity(): void {
 		this.writeLock.noteHumanActivity();
+	}
+
+	/**
+	 * Current advisory write-lock holder (`agent` | `human-active`). Used by
+	 * fleet inventory (GET /api/sessions) — does not invent new state.
+	 */
+	lockState(): WriteLockState {
+		return this.writeLock.state();
 	}
 
 	/**

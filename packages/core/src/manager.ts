@@ -545,6 +545,14 @@ export class SessionManager {
 	}
 
 	/**
+	 * Concurrency cap utilization for fleet inventory (P2.3).
+	 * `count` is registered sessions only (not in-flight reservations).
+	 */
+	capacity(): { maxSessions: number; count: number } {
+		return { maxSessions: this.maxSessions, count: this.sessions.size };
+	}
+
+	/**
 	 * Close and deregister a session. Idempotent — closing an unknown id is a
 	 * no-op. Frees a concurrency slot.
 	 */

@@ -158,3 +158,92 @@ function renderEvents(events: RecognizedEvent[]): void {
 		eventsEl.append(card);
 	}
 }
+
+// --- fleet session inventory (P2.3) -----------------------------------------
+
+interface SessionRow {
+	id: string;
+	name: string;
+	env: string;
+	state: string;
+	holder: string;
+	status: string;
+	lastActivityAt: number;
+}
+
+interface SessionsResponse {
+	ok: boolean;
+	maxSessions: number;
+	count: number;
+	sessions: SessionRow[];
+}
+
+const sessionsListEl = document.getElementById("sessions-list");
+const sessionsCapEl = document.getElementById("sessions-cap");
+
+function statusBadgeClass(status: string): string {
+	if (status === "human-takeover") return "human";
+	if (status === "driving") return "driving";
+	return "idle";
+}
+
+function renderSessionList(data: SessionsResponse): void {
+	if (sessionsCapEl) {
+		sessionsCapEl.textContent = `${data.count}/${data.maxSessions}`;
+	}
+	if (!sessionsListEl) return;
+	if (data.sessions.length === 0) {
+		sessionsListEl.replaceChildren();
+		const empty = document.createElement("div");
+		empty.className = "empty";
+		empty.textContent = "no sessions";
+		sessionsListEl.append(empty);
+		return;
+	}
+	sessionsListEl.replaceChildren();
+	for (const s of data.sessions) {
+		const btn = document.createElement("button");
+		btn.type = "button";
+		btn.className = `row${s.id === sessionId ? " active" : ""}`;
+		const title = document.createElement("div");
+		title.textContent = s.name || s.id;
+		const meta = document.createElement("div");
+		meta.className = "meta";
+		const st = document.createElement("span");
+		st.className = `badge ${statusBadgeClass(s.status)}`;
+		st.textContent = s.status;
+		const env = document.createElement("span");
+		env.className = "badge";
+		env.textContent = s.env;
+		const holder = document.createElement("span");
+		holder.className = `badge${s.holder === "human" ? " human" : ""}`;
+		holder.textContent = s.holder;
+		meta.append(st, env, holder);
+		btn.append(title, meta);
+		btn.addEventListener("click", () => {
+			if (s.id === sessionId) return;
+			const u = new URL(window.location.href);
+			u.searchParams.set("session", s.id);
+			if (token) u.searchParams.set("token", token);
+			window.location.href = u.toString();
+		});
+		sessionsListEl.append(btn);
+	}
+}
+
+async function refreshSessions(): Promise<void> {
+	try {
+		const headers: HeadersInit = {};
+		if (token) headers.Authorization = `Bearer ${token}`;
+		const qs = token ? `?token=${encodeURIComponent(token)}` : "";
+		const res = await fetch(`/api/sessions${qs}`, { headers });
+		if (!res.ok) return;
+		const data = (await res.json()) as SessionsResponse;
+		if (data.ok) renderSessionList(data);
+	} catch {
+		/* offline / unauthorized — leave last paint */
+	}
+}
+
+void refreshSessions();
+setInterval(() => void refreshSessions(), 2000);

@@ -110,12 +110,12 @@ published but the broader publish set is **gated** (ask first — see `CLAUDE.md
   pipeline.
 - **Gate:** owner sign-off before any public npm publish beyond the current set.
 
-#### P2.3 — Concurrency / fleet observability 🔲
+#### P2.3 — Concurrency / fleet observability ✅
 **Why:** An orchestrator spawns many sessions sharing one subscription; operators need to see cap
 utilization, isolation status, and per-session health at a glance.
-**Scope:**
-- Server-side session inventory + status (idle/driving/human-takeover) surfaced in the web UI.
-- Document concurrency caps + plan-rate-limit guidance (Responsible use).
+**Shipped:** `Session.lockState()` + `SessionManager.capacity()`; token-gated `GET /api/sessions`
+(holder + idle/driving/human-takeover + maxSessions/count); web client session list panel; Responsible
+use + Hermes docs for caps / rate-limit backoff.
 
 ---
 

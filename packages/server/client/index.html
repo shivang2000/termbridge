@@ -7,7 +7,28 @@
     <style>
       html, body { margin: 0; height: 100%; background: #0a0a0a; color: #e5e5e5;
         font-family: ui-monospace, "JetBrains Mono", Menlo, monospace; }
-      #term { height: 74vh; padding: 6px; }
+      #layout { display: flex; height: 100%; min-height: 0; }
+      #sessions { width: 220px; flex-shrink: 0; border-right: 1px solid #27272a;
+        display: flex; flex-direction: column; background: #0c0c0c; }
+      #sessions-head { padding: 8px 10px; font-size: 11px; color: #a3a3a3;
+        border-bottom: 1px solid #27272a; letter-spacing: 0.02em; }
+      #sessions-head strong { color: #e5e5e5; font-weight: 600; }
+      #sessions-list { overflow: auto; flex: 1; padding: 6px; }
+      #sessions-list .row { display: block; width: 100%; text-align: left;
+        background: transparent; border: 1px solid transparent; color: #e5e5e5;
+        border-radius: 6px; padding: 8px; margin-bottom: 4px; cursor: pointer;
+        font: inherit; font-size: 12px; }
+      #sessions-list .row:hover { background: #18181b; border-color: #3f3f46; }
+      #sessions-list .row.active { background: #18181b; border-color: #34d39966; }
+      #sessions-list .meta { color: #71717a; font-size: 11px; margin-top: 2px; }
+      #sessions-list .badge { display: inline-block; font-size: 10px; padding: 1px 6px;
+        border-radius: 999px; margin-right: 4px; border: 1px solid #3f3f46; color: #a3a3a3; }
+      #sessions-list .badge.human { color: #fbbf24; border-color: #f59e0b66; }
+      #sessions-list .badge.driving { color: #34d399; border-color: #34d39966; }
+      #sessions-list .badge.idle { color: #71717a; }
+      #sessions-list .empty { color: #52525b; font-size: 12px; padding: 10px 4px; }
+      #main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+      #term { flex: 1; min-height: 0; padding: 6px; }
       #activity { padding: 5px 10px; font-size: 12px; color: #a3a3a3;
         border-top: 1px solid #27272a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       #activity .live { color: #34d399; }
@@ -23,9 +44,17 @@
     </style>
   </head>
   <body>
-    <div id="term"></div>
-    <div id="activity">· waiting for activity…</div>
-    <div id="events"></div>
+    <div id="layout">
+      <aside id="sessions">
+        <div id="sessions-head">sessions <strong id="sessions-cap">–</strong></div>
+        <div id="sessions-list"><div class="empty">loading…</div></div>
+      </aside>
+      <div id="main">
+        <div id="term"></div>
+        <div id="activity">· waiting for activity…</div>
+        <div id="events"></div>
+      </div>
+    </div>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>

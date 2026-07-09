@@ -396,6 +396,11 @@ Run it behind your own auth/TLS before exposing it. For untrusted callers, also 
 - **Subscription terms / account risk.** Driving a subscription CLI with automation may violate the
   provider's terms and can lead to rate-limiting or account suspension. This is on you — understand your
   plan, cap concurrency, and don't run a large fleet against a single account expecting it to be allowed.
+- **Fleet observability.** The unified server exposes `GET /api/sessions` (token-gated) with
+  `maxSessions` / `count` and per-session `holder` (`agent`|`human`) + `status`
+  (`idle`|`driving`|`human-takeover`). The web client shows a live session list (`N/max` in the header).
+  Cap with `TERMBRIDGE_MAX_SESSIONS` (default `4`); when plan rate limits hit, recognizers emit
+  `rate_limited` — back off rather than opening more sessions.
 - **No evasion.** termbridge intentionally has no humanized-timing, account-rotation, or
   fingerprint-spoofing features, and contributions adding them will be declined. It pilots a CLI as-is.
 - **Code execution.** Every session is a real shell/TUI. Treat the tool API and the web token as
