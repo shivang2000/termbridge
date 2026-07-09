@@ -15,17 +15,30 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-// dependency order: core first, then packages that depend on it
-const PKGS = ["core", "mcp-server", "orchestrator", "sandbox-e2b"];
+// dependency order: core first, then packages that depend on it.
+// The "primary" versions list pins the deps that each package should declare
+// after publish (workspace:* → semver). core@1.0.7 stays the published
+// version so all consumers can resolve a single core release.
+const PKG_VERSIONS: Record<string, string> = {
+	core: "1.0.7",
+	"mcp-server": "1.0.7",
+	orchestrator: "1.0.7",
+	"sandbox-e2b": "1.0.9",
+};
+const PKGS = Object.keys(PKG_VERSIONS);
 const root = process.cwd();
 
-function rewriteWorkspaceDeps(pkg: Record<string, unknown>, version: string): void {
+function rewriteWorkspaceDeps(pkg: Record<string, unknown>, pinnedVersion: string): void {
 	for (const depField of ["dependencies", "devDependencies", "peerDependencies"] as const) {
 		const deps = pkg[depField] as Record<string, string> | undefined;
 		if (!deps) continue;
 		for (const [name, val] of Object.entries(deps)) {
 			if (val === "workspace:*" || val.startsWith("workspace:")) {
-				deps[name] = `^${version}`;
+				// Pin to the published version of the dependency, not the current
+				// package's own version (which may have been bumped for a hot-fix
+				// like sandbox-e2b → 1.0.9 but the published core is still 1.0.7).
+				const pinned = PKG_VERSIONS[name.replace(/^@termbridge\//, "")];
+				deps[name] = pinned ? `^${pinned}` : `^${pinnedVersion}`;
 			}
 		}
 	}
@@ -58,6 +71,25 @@ for (const p of PKGS) {
 		if (pc[k] !== undefined) j[k] = pc[k];
 	}
 	rewriteWorkspaceDeps(j, j.version);
+	// Add a `default` + `require` export condition so both ESM (import) and
+	// CJS (require) consumers can resolve. Also: `main`/`types` already at top
+	// level, but if `exports` is set Node ignores `main` unless the entry
+	// condition is reachable.
+	if (j.exports && typeof j.exports === "object" && "." in j.exports) {
+		const dot = (j.exports as Record<string, unknown>)["."];
+		if (dot && typeof dot === "object") {
+			const entry = dot as Record<string, string>;
+			// ESM (import): keep
+			entry.types = entry.types ?? j.types ?? "./dist/index.d.ts";
+			entry.import = entry.import ?? j.main ?? "./dist/index.js";
+			// CJS (require): add
+			if (!entry.require) {
+				entry.require = entry.import;
+			}
+			// Fallback
+			entry.default = entry.default ?? entry.import;
+		}
+	}
 	// Idempotent: skip a version that is already on the registry (safe CI re-runs).
 	let already = false;
 	try {
