@@ -4,6 +4,10 @@
 // registry. CREDS-GATED: no-ops with a clear message when E2B_API_KEY is unset, so
 // `bun run test` stays green without creds.
 //   E2B_API_KEY=... bun scripts/smoke-sandbox-e2b.ts
+//
+// Cleanup guarantee: the provider is ALWAYS destroy()'d in finally (success, assert
+// failure, mid-open failure). That kills the cloud sandbox so the E2B dashboard
+// does not accumulate orphans.
 import { SessionManager } from "../packages/core/src/index.ts";
 import { E2BSandboxProvider } from "../packages/sandbox-e2b/src/index.ts";
 
@@ -24,7 +28,7 @@ async function main() {
 	let id: string | undefined;
 	let ok = false;
 	try {
-		const session = await manager.open({ env: "sandbox", cwd: "/root", cmd: "bash" });
+		const session = await manager.open({ env: "sandbox", cwd: "/home/user", cmd: "bash" });
 		id = session.id;
 		console.log(`[smoke] opened sandbox session id=${id} (provider=${provider.name})`);
 		assert(
@@ -54,12 +58,22 @@ async function main() {
 			`\n[smoke] SANDBOX-E2B SMOKE FAILED ❌\n${err instanceof Error ? err.stack : String(err)}`,
 		);
 	} finally {
+		// Always free the registry slot if open succeeded.
 		if (id) {
 			try {
 				await manager.close(id);
+				console.log("[smoke] finally: manager.close ok");
 			} catch {
 				/* best-effort */
 			}
+		}
+		// Always kill the cloud sandbox (covers open-failed-after-ensure, close
+		// missed destroy, and success path double-destroy which is a no-op).
+		try {
+			await provider.destroy();
+			console.log("[smoke] finally: provider.destroy (sandbox killed)");
+		} catch {
+			/* destroy must never throw */
 		}
 	}
 	process.exit(ok ? 0 : 1);

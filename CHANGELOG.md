@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+E2B sandbox cleanup on failure (no orphan sandboxes on the dashboard).
+
+- **`E2BSandboxProvider.ensure`**: kills the cloud sandbox if tmux install/probe fails after create.
+- **`SandboxEnvironment.ensureSession`**: destroys the provider when `tmux new-session` fails.
+- **Smoke**: always `provider.destroy()` in `finally` (success and failure).
+
 Server/MCP auto-wire `env:"sandbox"` when `E2B_API_KEY` is set (roadmap P1.1 finish).
 
 - **`sandboxProviderFromEnv()`** in `@termbridge/sandbox-e2b`.

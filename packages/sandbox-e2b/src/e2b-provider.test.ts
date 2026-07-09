@@ -156,4 +156,13 @@ describe("E2BSandboxProvider", () => {
 		await expect(p.destroy()).resolves.toBeUndefined();
 		expect(m.killCalls).toBe(0);
 	});
+
+	it("ensure kills the sandbox when tmux install fails (no orphan)", async () => {
+		const m = makeMockFactory([{ exitCode: 1, stdout: "", stderr: "apt failed" }]);
+		const p = new E2BSandboxProvider({ apiKey: "k", sandboxFactory: m.sandboxFactory });
+		await expect(p.ensure({ name: "s", cwd: "/w" })).rejects.toThrow(/failed to install tmux/);
+		expect(m.killCalls).toBe(1);
+		// After destroy, exec must refuse (sandbox cleared).
+		await expect(p.exec(["true"])).rejects.toThrow(/before ensure/);
+	});
 });

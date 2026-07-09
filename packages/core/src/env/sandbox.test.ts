@@ -134,6 +134,8 @@ describe("SandboxEnvironment", () => {
 		// ensure still ran (sandbox was provisioned); only the session creation failed.
 		expect(provider.ensureCalls.length).toBe(1);
 		expect(provider.execCalls.length).toBe(1);
+		// Tear down the cloud sandbox so a failed open cannot leave an orphan.
+		expect(provider.destroyCalls).toBe(1);
 	});
 
 	it("tmux() wraps args in 'tmux -L socket ...' and returns the result verbatim", async () => {

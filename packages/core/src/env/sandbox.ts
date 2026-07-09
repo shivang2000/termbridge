@@ -73,7 +73,14 @@ export class SandboxEnvironment implements Environment {
 			...(opts.cmd ? [opts.cmd] : []),
 		]);
 		if (newSession.code !== 0) {
-			throw new Error("tmux new-session failed: " + newSession.stderr);
+			// Provider.ensure already booted a cloud sandbox — tear it down so a
+			// failed open cannot leave an orphaned billed sandbox.
+			try {
+				await this.provider.destroy();
+			} catch {
+				/* destroy must never throw */
+			}
+			throw new Error(`tmux new-session failed: ${newSession.stderr}`);
 		}
 	}
 

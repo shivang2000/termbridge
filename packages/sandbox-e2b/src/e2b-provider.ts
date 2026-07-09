@@ -76,6 +76,8 @@ export class E2BSandboxProvider implements SandboxProvider {
 		image?: string;
 		env?: Record<string, string>;
 	}): Promise<void> {
+		// Tear down any previous sandbox this instance owned (one instance == one sandbox).
+		await this.destroy();
 		this.sandbox = await this.sandboxFactory({
 			...(opts.image ? { template: opts.image } : { template: this.template }),
 			envs: opts.env,
@@ -83,20 +85,27 @@ export class E2BSandboxProvider implements SandboxProvider {
 			timeoutMs: this.timeoutMs,
 			metadata: { name: opts.name },
 		});
-		// The E2B `base` template does NOT ship tmux, and the default user is
-		// non-root (uid 1000, in the sudo group). Install with passwordless sudo
-		// so SandboxEnvironment.ensureSession can run tmux new-session.
-		const install = await this.execRaw(
-			"command -v tmux >/dev/null 2>&1 || (sudo -n apt-get update -y && sudo -n apt-get install -y tmux)",
-		);
-		if (install.code !== 0) {
-			throw new Error(
-				`E2BSandboxProvider: failed to install tmux (exit ${install.code}): ${install.stderr || install.stdout}`,
+		try {
+			// The E2B `base` template does NOT ship tmux, and the default user is
+			// non-root (uid 1000, in the sudo group). Install with passwordless sudo
+			// so SandboxEnvironment.ensureSession can run tmux new-session.
+			const install = await this.execRaw(
+				"command -v tmux >/dev/null 2>&1 || (sudo -n apt-get update -y && sudo -n apt-get install -y tmux)",
 			);
-		}
-		const probe = await this.execRaw("command -v tmux");
-		if (probe.code !== 0) {
-			throw new Error("E2BSandboxProvider: tmux still missing after install");
+			if (install.code !== 0) {
+				throw new Error(
+					`E2BSandboxProvider: failed to install tmux (exit ${install.code}): ${install.stderr || install.stdout}`,
+				);
+			}
+			const probe = await this.execRaw("command -v tmux");
+			if (probe.code !== 0) {
+				throw new Error("E2BSandboxProvider: tmux still missing after install");
+			}
+		} catch (err) {
+			// Cloud sandbox is already billed/running — always kill on setup failure
+			// so a failed smoke/open cannot leave orphans on the E2B dashboard.
+			await this.destroy();
+			throw err;
 		}
 	}
 
