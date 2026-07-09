@@ -3,11 +3,13 @@
 termbridge runs tmux **inside** a cloud sandbox via the pluggable `SandboxProvider`
 interface (D4). Core stays SDK-free; each provider is its own package.
 
-| Package | Backend | Status |
-|---|---|---|
-| `@termbridge/sandbox-e2b` | [E2B](https://e2b.dev) | ✅ live smoke proven; auto-wire with `E2B_API_KEY` |
-| `@termbridge/sandbox-daytona` | [Daytona](https://www.daytona.io) | ✅ unit-tested; inject `DaytonaClient` (map your SDK) |
-| `@termbridge/sandbox-cloudflare` | Cloudflare sandboxes | ✅ unit-tested; inject `CloudflareSandboxClient` |
+| Package | Backend | Status | Get keys |
+|---|---|---|---|
+| `@termbridge/sandbox-e2b` | [E2B](https://e2b.dev) | ✅ live smoke proven; auto-wire with `E2B_API_KEY` | [e2b.dev/dashboard](https://e2b.dev/dashboard) |
+| `@termbridge/sandbox-daytona` | [Daytona](https://www.daytona.io) | ✅ unit-tested; inject `DaytonaClient` (map your SDK) | [app.daytona.io](https://app.daytona.io) |
+| `@termbridge/sandbox-cloudflare` | Cloudflare sandboxes | ✅ unit-tested; inject `CloudflareSandboxClient` | [API tokens](https://dash.cloudflare.com/profile/api-tokens) |
+
+Copy `.env.example` → `.env` and fill keys (`.env` is gitignored).
 
 ## Shared contract
 
