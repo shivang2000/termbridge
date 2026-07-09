@@ -105,11 +105,10 @@ auth story (API key vs subscription volume), `--watch` ops, Discord checks, capt
 **Still ongoing:** re-tune when Claude Code TUI changes; optional declarative recognizer
 spec remains deferred (data-not-code where feasible, behind existing `Recognizer` API).
 
-#### P2.2 — npm publish of the remaining packages 🟡→✅ at v1.0.7 (when tagged)
+#### P2.2 — npm publish of the remaining packages ✅ (v1.0.7)
 **Why:** Ship the full public set including `@termbridge/sandbox-e2b`.
-**Shipped (code):** all packages at **1.0.7**; `sandbox-e2b` on `scripts/publish-npm.ts` allowlist;
-`claude-code-plugin` stays private. Release: tag `v1.0.7` → CI publish, or
-`bun scripts/publish-npm.ts` when logged in to npm.
+**Shipped:** published `@termbridge/{core,mcp-server,orchestrator,sandbox-e2b,server}@1.0.7`.
+`claude-code-plugin` stays private.
 
 #### P2.3 — Concurrency / fleet observability ✅
 **Why:** An orchestrator spawns many sessions sharing one subscription; operators need to see cap
