@@ -2,9 +2,10 @@
  * P2.1 corpus guard — every screen fixture under __fixtures__/ must still
  * match its recognizer. Fails loudly on TUI drift (path + kind in the message).
  */
+
+import { describe, expect, it } from "bun:test";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "bun:test";
 import type { Recognizer } from "../types.js";
 import { claudeActivityRecognizer } from "./claude-activity.js";
 import { claudePermissionRecognizer } from "./claude-permission.js";
@@ -43,7 +44,10 @@ describe("recognizer corpus guard (P2.1)", () => {
 			return statSync(full).isDirectory() && !name.startsWith(".");
 		});
 		for (const dir of dirs) {
-			expect(CORPUS[dir], `unknown fixture dir "${dir}" — add it to CORPUS in corpus.guard.test.ts`).toBeDefined();
+			expect(
+				CORPUS[dir],
+				`unknown fixture dir "${dir}" — add it to CORPUS in corpus.guard.test.ts`,
+			).toBeDefined();
 		}
 		expect(dirs.length).toBeGreaterThan(0);
 	});
