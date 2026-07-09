@@ -2,7 +2,13 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ConcurrencyLimitError, EnvNotAllowedError, SessionManager } from "./manager.js";
+import type { SandboxProvider } from "./env/sandbox.js";
+import {
+	ConcurrencyLimitError,
+	EnvNotAllowedError,
+	SandboxProviderNotConfiguredError,
+	SessionManager,
+} from "./manager.js";
 import { PtyObserver } from "./observer/pty-observer.js";
 import type {
 	EnsureSessionOptions,
@@ -836,5 +842,60 @@ describe("SessionManager env forwarding (GH_TOKEN for in-session push/PR)", () =
 				expect(env.GH_TOKEN).toBe("tok");
 			});
 		});
+	});
+});
+
+/** A recording mock SandboxProvider (mirrors sandbox.test.ts makeProvider). */
+function makeSandboxProvider(): SandboxProvider & { ensureCalls: number } {
+	let ensureCalls = 0;
+	return {
+		name: "mock-sandbox",
+		async ensure() {
+			ensureCalls++;
+		},
+		async exec() {
+			return { stdout: "", stderr: "", code: 0 };
+		},
+		async destroy() {},
+		get ensureCalls() {
+			return ensureCalls;
+		},
+	} as SandboxProvider & { ensureCalls: number };
+}
+
+describe("SessionManager — sandbox env selection", () => {
+	test("env:'sandbox' + a configured sandboxProvider selects SandboxEnvironment", async () => {
+		const provider = makeSandboxProvider();
+		let n = 0;
+		const manager = new SessionManager({
+			sandboxProvider: provider,
+			observerFactory: () => new PtyObserver({ clock: () => 0 }),
+			idGen: () => `sb${++n}`,
+			pipeDir: "/tmp/termbridge-sandbox-test",
+		});
+		const session = await manager.open({ env: "sandbox", cwd: "/w" });
+		expect(session.id).toBe("sb1");
+		const info = manager.list()[0];
+		expect(info?.env).toBe("sandbox");
+		expect(provider.ensureCalls).toBe(1);
+		await manager.close(session.id);
+	});
+
+	test("env:'sandbox' with NO sandboxProvider throws SandboxProviderNotConfiguredError BEFORE spawn", async () => {
+		let n = 0;
+		const manager = new SessionManager({
+			observerFactory: () => new PtyObserver({ clock: () => 0 }),
+			idGen: () => `x${++n}`,
+			pipeDir: "/tmp/termbridge-sandbox-test",
+		});
+		let caught: unknown;
+		try {
+			await manager.open({ env: "sandbox", cwd: "/w" });
+		} catch (err) {
+			caught = err;
+		}
+		expect(caught).toBeInstanceOf(SandboxProviderNotConfiguredError);
+		expect((caught as SandboxProviderNotConfiguredError).code).toBe("sandbox_not_configured");
+		expect(manager.list()).toHaveLength(0);
 	});
 });

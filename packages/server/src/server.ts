@@ -19,6 +19,7 @@ import { createBunWebSocket, serveStatic } from "hono/bun";
 import { createBridge } from "./bridge.js";
 import { isAuthorized, isOriginAllowed } from "./guard.js";
 import { createToolDispatch } from "./http-tools.js";
+import { createMcpHttpHandler, type McpHttpHandler } from "./mcp-http.js";
 
 // Resolve relative to this file so the path works both in-repo (dev) and when
 // the package is installed via bunx from node_modules.
@@ -41,6 +42,8 @@ export interface TermbridgeServerOptions {
 export interface TermbridgeServer {
 	app: Hono;
 	websocket: typeof websocket;
+	/** MCP streamable-HTTP handler (POST/GET/DELETE /mcp). Call close() on shutdown. */
+	mcp: McpHttpHandler;
 }
 
 export function createTermbridgeServer(opts: TermbridgeServerOptions): TermbridgeServer {
@@ -61,6 +64,20 @@ export function createTermbridgeServer(opts: TermbridgeServerOptions): Termbridg
 		const body = await c.req.json().catch(() => ({}));
 		const res = await tools.call(name, body);
 		return c.json(res, res.ok ? 200 : 400);
+	});
+
+	// MCP streamable-HTTP transport (P1.2) — lets MCP clients connect directly
+	// over HTTP, sharing the single SessionManager so the browser watches their
+	// sessions natively (no per-client stdio proxy). Token-gated exactly like
+	// /api/tool/:name (agent-facing → no Origin gate). The handler owns per-MCP
+	// -session bookkeeping; the guard reads headers/URL only and never touches
+	// the JSON-RPC body, so it stays intact for the transport.
+	const mcp = createMcpHttpHandler({ manager });
+	app.all("/mcp", async (c) => {
+		if (!isAuthorized({ token, url: c.req.url, authHeader: c.req.header("authorization") })) {
+			return c.json({ ok: false, error: "unauthorized" }, 401);
+		}
+		return mcp.handle(c.req.raw);
 	});
 
 	// Human watch + intervene — token-gated + Origin-allowlisted.
@@ -145,5 +162,5 @@ export function createTermbridgeServer(opts: TermbridgeServerOptions): Termbridg
 	app.get("/", serveStatic({ path: `${clientDir}/index.html` }));
 	app.use("/*", serveStatic({ root: clientDir }));
 
-	return { app, websocket };
+	return { app, websocket, mcp };
 }

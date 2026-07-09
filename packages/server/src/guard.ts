@@ -24,9 +24,11 @@ export function extractToken(url: string, authHeader?: string | null): string {
 		// non-absolute URL — fall through to the header
 	}
 	if (authHeader) {
-		const m = /^Bearer\s+(.+)$/i.exec(authHeader);
+		const m = /^Bearer\s+(.+)$/i.exec(authHeader.trim());
 		if (m?.[1]) {
-			return m[1];
+			// Trim trailing whitespace so a stray space can't widen the compared
+			// secret (and a pasted token with a trailing newline still matches).
+			return m[1].trim();
 		}
 	}
 	return "";

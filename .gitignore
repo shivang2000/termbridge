@@ -30,6 +30,9 @@ tmp/
 # omc tooling state
 .omc/
 
+# local openclaude tooling state
+.openclaude/
+
 # transient agent worktrees
 .claude/worktrees/
 

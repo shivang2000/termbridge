@@ -19,9 +19,13 @@ export function createRemoteCaller(opts: RemoteOptions): RemoteCaller {
 	const base = opts.serverUrl.replace(/\/$/, "");
 	const f = opts.fetchImpl ?? fetch;
 	return async (name, args) => {
-		const res = await f(`${base}/api/tool/${name}?token=${encodeURIComponent(opts.token)}`, {
+		// SECURITY: send the bearer token via the Authorization header, not the URL
+		// query string, so it never leaks into server access logs / proxy logs / URL
+		// history. The server's extractToken reads the header; ?token= stays a
+		// supported fallback (used by the browser WS, which cannot set headers).
+		const res = await f(`${base}/api/tool/${name}`, {
 			method: "POST",
-			headers: { "content-type": "application/json" },
+			headers: { "content-type": "application/json", authorization: `Bearer ${opts.token}` },
 			body: JSON.stringify(args ?? {}),
 		});
 		const j = (await res.json()) as { ok: boolean; data?: unknown; error?: string };

@@ -40,13 +40,14 @@ export function createToolSpecs(manager: SessionManager): ToolSpec[] {
 			name: "open_session",
 			description:
 				"Open a new interactive terminal session (tmux substrate) and return its id. " +
-				"env selects the execution backend (local or docker). Set autoApprove:true to have " +
+				"env selects the execution backend (local, docker, or sandbox). Set autoApprove:true to have " +
 				"termbridge auto-answer the session's routine permission prompts in-session (so a driving " +
 				"agent that polls only occasionally never leaves Claude stuck); login is never auto-answered " +
-				"and a human takeover pauses it.",
+				"and a human takeover pauses it. env:'sandbox' requires a configured sandboxProvider on the " +
+				"server (it throws sandbox_not_configured if none is set).",
 			inputSchema: {
 				name: optStr,
-				env: z.enum(["local", "docker"]).optional(),
+				env: z.enum(["local", "docker", "sandbox"]).optional(),
 				cwd: optStr,
 				repo: optStr,
 				branch: optStr,

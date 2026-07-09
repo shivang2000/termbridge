@@ -16,6 +16,7 @@ import { join } from "node:path";
 import { AuthProvisioner } from "./auth/provisioner.js";
 import { DockerEnvironment } from "./env/docker.js";
 import { LocalEnvironment } from "./env/local.js";
+import { SandboxEnvironment, type SandboxProvider } from "./env/sandbox.js";
 import { PtyObserver, type ReadAppended } from "./observer/pty-observer.js";
 import { claudeActivityRecognizer } from "./recognizers/claude-activity.js";
 import { claudePermissionRecognizer } from "./recognizers/claude-permission.js";
@@ -63,6 +64,22 @@ export class EnvNotAllowedError extends Error {
 	) {
 		super(`environment "${env}" is not permitted (allowed: ${allowed.join(", ")})`);
 		this.name = "EnvNotAllowedError";
+	}
+}
+
+/**
+ * Thrown by `open()` when `env:"sandbox"` is requested but no `SandboxProvider`
+ * was configured on the manager (see {@link SessionManagerOptions.sandboxProvider}).
+ * Thrown BEFORE any slot is reserved or sandbox spawned so a failed open frees its
+ * slot and never leaks a cloud sandbox.
+ */
+export class SandboxProviderNotConfiguredError extends Error {
+	readonly code = "sandbox_not_configured" as const;
+	constructor() {
+		super(
+			`environment "sandbox" requires a configured sandboxProvider (pass sandboxProvider to SessionManagerOptions)`,
+		);
+		this.name = "SandboxProviderNotConfiguredError";
 	}
 }
 
@@ -158,6 +175,14 @@ export interface SessionManagerOptions {
 	 * Falls back to `TERMBRIDGE_AUTO_APPROVE` (1/true/yes/on). Default off.
 	 */
 	autoApprove?: boolean;
+	/**
+	 * A configured {@link SandboxProvider}. When set, `env:"sandbox"` selects a
+	 * {@link SandboxEnvironment} driving this provider; when omitted, an
+	 * `env:"sandbox"` open throws {@link SandboxProviderNotConfiguredError} before
+	 * any sandbox spawns. Core stays dependency-free (D3) — the caller supplies the
+	 * concrete provider (e.g. `E2BSandboxProvider` from `@termbridge/sandbox-e2b`).
+	 */
+	sandboxProvider?: SandboxProvider;
 }
 
 interface Entry {
@@ -241,6 +266,8 @@ export class SessionManager {
 	private readonly forwardEnv: readonly string[];
 	/** Default for per-session auto-approve when `open()` doesn't specify (TERMBRIDGE_AUTO_APPROVE). */
 	private readonly autoApproveDefault: boolean;
+	/** Configured cloud sandbox provider; when set, env:"sandbox" is selectable. */
+	private readonly sandboxProvider: SandboxProvider | undefined;
 
 	private readonly sessions = new Map<string, Entry>();
 	/**
@@ -268,6 +295,15 @@ export class SessionManager {
 					return new DockerEnvironment({
 						pipeDir: ctx.pipeDir,
 						...(exec ? { exec } : {}),
+						...(socket ? { socket } : {}),
+					});
+				}
+				if (kind === "sandbox") {
+					if (!this.sandboxProvider) {
+						throw new SandboxProviderNotConfiguredError();
+					}
+					return new SandboxEnvironment({
+						provider: this.sandboxProvider,
 						...(socket ? { socket } : {}),
 					});
 				}
@@ -311,6 +347,7 @@ export class SessionManager {
 		// In-session auto-approve default: explicit option wins, else TERMBRIDGE_AUTO_APPROVE.
 		this.autoApproveDefault =
 			opts.autoApprove ?? /^(1|true|yes|on)$/i.test(process.env.TERMBRIDGE_AUTO_APPROVE ?? "");
+		this.sandboxProvider = opts.sandboxProvider;
 	}
 
 	/**

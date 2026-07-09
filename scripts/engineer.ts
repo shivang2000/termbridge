@@ -71,9 +71,9 @@ let tools: ToolCall;
 let inproc: { mgr: SessionManager; pipeDir: string } | undefined;
 if (serverUrl) {
 	tools = async (name, args) => {
-		const res = await fetch(`${serverUrl}/api/tool/${name}?token=${encodeURIComponent(token)}`, {
+		const res = await fetch(`${serverUrl}/api/tool/${name}`, {
 			method: "POST",
-			headers: { "content-type": "application/json" },
+			headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
 			body: JSON.stringify(args),
 		});
 		const j = (await res.json()) as { ok: boolean; data?: unknown; error?: string };

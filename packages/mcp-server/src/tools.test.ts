@@ -89,6 +89,15 @@ describe("createToolSpecs — surface", () => {
 			].sort(),
 		);
 	});
+
+	test("open_session advertises env enum of local|docker|sandbox", () => {
+		const { manager } = buildManager();
+		const specs = createToolSpecs(manager);
+		const os = spec(specs, "open_session");
+		// zod v4: .optional() wraps the enum; the inner enum's options hold the values.
+		const envSchema = os.inputSchema.env as { _def: { innerType?: { options?: string[] } } };
+		expect(envSchema._def.innerType?.options).toEqual(["local", "docker", "sandbox"]);
+	});
 });
 
 describe("createToolSpecs — handlers", () => {
@@ -103,6 +112,21 @@ describe("createToolSpecs — handlers", () => {
 		expect(res.id).toBe("id1");
 		expect(res.name).toBe("tb-id1");
 		expect(res.env).toBe("local");
+	});
+
+	test("open_session accepts env:'sandbox' and round-trips it", async () => {
+		const { manager } = buildManager();
+		const specs = createToolSpecs(manager);
+		const res = (await spec(specs, "open_session").handler({ env: "sandbox", cwd: "/work" })) as {
+			id: string;
+			name: string;
+			env: string;
+		};
+		expect(res.id).toBe("id1");
+		// buildManager wires a fake envFactory that returns the same env regardless of
+		// kind, so the manager reports the requested env. The point: the handler does
+		// NOT reject "sandbox" — the enum now accepts it.
+		expect(res.env).toBe("sandbox");
 	});
 
 	test("open_session defaults env to 'local' when unspecified", async () => {

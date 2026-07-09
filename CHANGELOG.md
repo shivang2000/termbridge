@@ -1,5 +1,44 @@
 # Changelog
 
+## Unreleased
+
+Live cloud `SandboxProvider` (E2B) — `env:"sandbox"` is now selectable end-to-end (roadmap P1.1).
+
+- **New `@termbridge/sandbox-e2b`** package: `E2BSandboxProvider implements SandboxProvider`
+  against the E2B SDK. One provider instance provisions/execs/destroys exactly one E2B
+  sandbox (one sandbox == one session). `exec` maps the argv to the SDK's `commands.run`,
+  shell-quotes each arg, and catches `CommandExitError` so non-zero exits return as data
+  (never reject) — matching the `ExecFn` contract. tmux is installed on `ensure` (the
+  default `base` template lacks it). Every SDK call is behind an injectable
+  `sandboxFactory` so unit tests never touch the cloud.
+- **`SessionManager` gains a `sandboxProvider?: SandboxProvider` option.** With it set,
+  `env:"sandbox"` selects `SandboxEnvironment`; without it, `env:"sandbox"` throws a
+  typed `SandboxProviderNotConfiguredError` (code `sandbox_not_configured`) BEFORE any
+  sandbox spawns. Core stays dependency-free (D3) — only the new package imports `e2b`.
+- **MCP `open_session` enum** is now `local | docker | sandbox`.
+- Smoke: `scripts/smoke-sandbox-e2b.ts` (creds-gated; no-ops without `E2B_API_KEY`).
+- **Non-goal:** multi-provider fan-out (E2B first; Daytona/Cloudflare are Phase 3 ports).
+
+Streamable-HTTP MCP transport on the unified server (roadmap P1.2).
+
+- **`@termbridge/server` now speaks MCP over HTTP** at `POST/GET/DELETE /mcp` (the spec's
+  streamable-HTTP transport, via the SDK's `WebStandardStreamableHTTPServerTransport`). MCP clients
+  (Hermes, Claude Code, Cursor) can connect **directly** to the unified server over HTTP and share its
+  single `SessionManager` — so the browser watches *their* sessions natively, with no per-client stdio
+  proxy, and remote MCP clients work across a network boundary. Reuses `createServer` from
+  `@termbridge/mcp-server`, so the 13-tool surface is identical to stdio and `/api/tool` (no second tool
+  definition).
+- **Security unchanged:** `/mcp` is token-gated exactly like `/api/tool/:name` (bearer token, constant-time,
+  header-or-`?token=`; loopback bind by default). The transport runs stateful (one server+transport pair per
+  MCP client session, keyed by the `Mcp-Session-Id` header the SDK mints), supporting SSE streaming + the
+  initialize→DELETE lifecycle.
+- **stdio stays the zero-infra default** (non-goal: replacing it).
+- Smoke: `bun scripts/smoke-mcp-http.ts` (real tmux) — an HTTP MCP client opens a session, drives it, and
+  asserts the id is visible in the server's shared registry.
+- **Fix:** `startServer` now returns the actual bound port (`server.port`) instead of the requested one,
+  so `port: 0` (ephemeral) callers get the real port to reach the server (fixes `scripts/smoke-watch.ts`,
+  which built its base URL from the returned port).
+
 ## v1.0.6 — 2026-06-24
 
 Browser watch for Hermes-driven sessions.
