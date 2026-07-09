@@ -1,6 +1,6 @@
 {
 	"name": "@termbridge/sandbox-e2b",
-	"version": "1.0.7",
+	"version": "1.0.8",
 	"type": "module",
 	"license": "MIT",
 	"description": "E2B SandboxProvider for termbridge — env:\"sandbox\" isolation via the E2B cloud SDK",

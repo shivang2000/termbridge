@@ -2,7 +2,9 @@
 
 ## Unreleased
 
-(nothing yet)
+- **@termbridge/sandbox-e2b@1.0.8** published to npm (publisher confirmed); public registry
+  metadata may lag for brand-new scoped packages — if `npm view` 404s, install from the
+  monorepo or retry after npm indexes the package.
 
 ## v1.0.7 — 2026-07-10
 
