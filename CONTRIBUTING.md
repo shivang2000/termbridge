@@ -20,7 +20,10 @@ Run on the host; most need the `termbridge:dev` image and creds at `~/.termbridg
 |---|---|
 | `bun scripts/smoke-env-guard.ts` | docker-only guard rejects `env:local` over real stdio (no docker/creds needed) |
 | `bun scripts/smoke-concurrency.ts` | race-safe concurrency cap + per-session isolation (real docker) |
-| `bun scripts/smoke-sandbox-e2b.ts` | live cloud sandbox (E2B): a sandbox session is opened/driven/closed over the real provider (creds-gated — no-ops without `E2B_API_KEY`) |
+| `bun --env-file=.env scripts/smoke-sandbox-all.ts` | all cloud providers: E2B + Daytona (create/drive/kill) + Cloudflare (token verify only; no resources) |
+| `bun scripts/smoke-sandbox-e2b.ts` | live E2B: open/drive/close (creds-gated — no-ops without `E2B_API_KEY`) |
+| `bun scripts/smoke-sandbox-daytona.ts` | live Daytona: ephemeral sandbox open/drive/delete (creds-gated) |
+| `bun scripts/smoke-sandbox-cloudflare.ts` | CF token + account check; creates nothing (Containers need Wrangler) |
 | `bun scripts/smoke-mcp-http.ts` | streamable-HTTP MCP transport (`/mcp`): a real HTTP MCP client drives a local tmux session + asserts it lands in the server's shared registry (needs tmux) |
 | `bun scripts/smoke-engineer-loop.ts` | the engineering loop drives real claude to fix a failing test |
 | `bun scripts/accept-final.ts` | full acceptance: agent edits a bound repo via real claude, human co-present |

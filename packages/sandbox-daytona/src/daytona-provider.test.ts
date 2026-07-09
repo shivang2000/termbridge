@@ -14,10 +14,7 @@ function mockClient(opts?: {
 	const execs: string[] = [];
 	const destroys: string[] = [];
 	let i = 0;
-	const results = opts?.execResults ?? [
-		{ exitCode: 0, stdout: "", stderr: "" },
-		{ exitCode: 0, stdout: "/usr/bin/tmux", stderr: "" },
-	];
+	const results = opts?.execResults ?? [{ exitCode: 0, stdout: "/usr/bin/tmux", stderr: "" }];
 	const client: DaytonaClient = {
 		async create(o) {
 			if (opts?.failCreate) throw new Error("create failed");
@@ -56,7 +53,6 @@ describe("DaytonaSandboxProvider", () => {
 	it("exec shell-joins argv", async () => {
 		const m = mockClient({
 			execResults: [
-				{ exitCode: 0, stdout: "", stderr: "" },
 				{ exitCode: 0, stdout: "/usr/bin/tmux", stderr: "" },
 				{ exitCode: 0, stdout: "ok", stderr: "" },
 			],
@@ -70,10 +66,7 @@ describe("DaytonaSandboxProvider", () => {
 
 	it("ensure destroys workspace when tmux probe fails", async () => {
 		const m = mockClient({
-			execResults: [
-				{ exitCode: 0, stdout: "", stderr: "" },
-				{ exitCode: 1, stdout: "", stderr: "no tmux" },
-			],
+			execResults: [{ exitCode: 1, stdout: "", stderr: "no tmux" }],
 		});
 		const p = new DaytonaSandboxProvider({ client: m.client });
 		await expect(p.ensure({ name: "s", cwd: "/w" })).rejects.toThrow(/tmux missing/);

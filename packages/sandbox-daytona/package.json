@@ -29,5 +29,14 @@
 	},
 	"dependencies": {
 		"@termbridge/core": "workspace:*"
+	},
+	"devDependencies": {
+		"@daytona/sdk": "^0.195.0"
+	},
+	"peerDependencies": {
+		"@daytona/sdk": ">=0.100.0"
+	},
+	"peerDependenciesMeta": {
+		"@daytona/sdk": { "optional": true }
 	}
 }

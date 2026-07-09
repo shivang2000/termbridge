@@ -1,6 +1,10 @@
 // Public barrel for @termbridge/sandbox-daytona.
 export {
-	type DaytonaClient,
 	DaytonaSandboxProvider,
+	type DaytonaClient,
 	type DaytonaSandboxProviderOptions,
 } from "./daytona-provider.js";
+export {
+	createDaytonaClientFromEnv,
+	type CreateDaytonaClientOptions,
+} from "./from-env.js";

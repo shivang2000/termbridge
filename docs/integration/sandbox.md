@@ -49,8 +49,22 @@ const provider = new DaytonaSandboxProvider({ client });
 
 Same shape for `CloudflareSandboxClient`.
 
-## Live smoke (E2B only today)
+## Live smokes (creds-gated; always destroy)
 
 ```bash
-E2B_API_KEY=… bun scripts/smoke-sandbox-e2b.ts
+# all providers (loads .env)
+bun --env-file=.env scripts/smoke-sandbox-all.ts
+
+# individual
+bun --env-file=.env scripts/smoke-sandbox-e2b.ts
+bun --env-file=.env scripts/smoke-sandbox-daytona.ts
+bun --env-file=.env scripts/smoke-sandbox-cloudflare.ts
 ```
+
+| Smoke | What it proves | Cleanup |
+|---|---|---|
+| E2B | open + drive + registry + kill | `provider.destroy` + list verify 0 |
+| Daytona | open + drive + registry + kill (ephemeral sandbox) | `provider.destroy` → SDK `delete` |
+| Cloudflare | token active + account Workers API | **creates nothing** (Containers need Wrangler Worker) |
+
+Without the relevant env keys each smoke no-ops and exits 0.

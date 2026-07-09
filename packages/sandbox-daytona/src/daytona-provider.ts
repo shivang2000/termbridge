@@ -53,13 +53,13 @@ export class DaytonaSandboxProvider implements SandboxProvider {
 		});
 		this.workspaceId = ws.id;
 		try {
-			const install = await this.execRaw(
-				"command -v tmux >/dev/null 2>&1 || (sudo -n apt-get update -y && sudo -n apt-get install -y tmux) || (command -v apk >/dev/null && sudo -n apk add tmux) || true",
+			// Single command: install if needed, then require tmux on PATH.
+			const probe = await this.execRaw(
+				"command -v tmux >/dev/null 2>&1 || (sudo -n apt-get update -y && sudo -n apt-get install -y tmux); command -v tmux",
 			);
-			const probe = await this.execRaw("command -v tmux");
 			if (probe.code !== 0) {
 				throw new Error(
-					`DaytonaSandboxProvider: tmux missing after install (exit ${install.code}): ${install.stderr || install.stdout}`,
+					`DaytonaSandboxProvider: tmux missing after install (exit ${probe.code}): ${probe.stderr || probe.stdout}`,
 				);
 			}
 		} catch (err) {
