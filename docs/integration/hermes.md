@@ -73,8 +73,8 @@ needed — the MCP server comes from npm and the session sandbox from Docker Hub
 ### 1. Get the per-session sandbox image (no clone needed)
 Each session runs `claude` inside this image; tag it as the default `termbridge:dev`:
 ```bash
-docker pull shivang2000/termbridge-sandbox:1.0.4
-docker tag  shivang2000/termbridge-sandbox:1.0.4 termbridge:dev
+docker pull shivang2000/termbridge-sandbox:1.0.7
+docker tag  shivang2000/termbridge-sandbox:1.0.7 termbridge:dev
 ```
 
 ### 2. Log in to Claude once (creds persist + are shared by every session)
@@ -138,7 +138,8 @@ the live browser view (the unified server) and **type to take over** at any poin
 - **The same loop without a clone / without chat:** `@termbridge/orchestrator`'s `runEngineerLoop`, or the
   CLI `scripts/engineer.ts` against a running server — see the README "Walkthrough".
 - **Published on npm:** `@termbridge/core`, `@termbridge/mcp-server`, `@termbridge/orchestrator`,
-  `@termbridge/server` (latest: 1.0.6). The MCP server runs via `npx -y @termbridge/mcp-server` (no clone).
+  `@termbridge/server`, `@termbridge/sandbox-e2b` (latest: 1.0.7). The MCP server runs via
+  `npx -y @termbridge/mcp-server` (no clone).
   To build your own loop, depend on `@termbridge/orchestrator`. Browser watch: `bunx @termbridge/server`
   (or `setup.sh --watch`).
 - **Safety/limits:** keep `TERMBRIDGE_ALLOWED_ENVS=docker` and a low `TERMBRIDGE_MAX_SESSIONS`.

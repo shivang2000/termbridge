@@ -18,7 +18,7 @@ paperclip, your own).
 
 ---
 
-## Current state — v1.0.6 (M0–M9 complete)
+## Current state — v1.0.7 (M0–M9 + Phase 1–2 build complete)
 
 A stable, MIT-licensed, open-source substrate. ~900 unit tests (all mocked) + real smokes
 (tmux, Docker, MCP stdio, web/Playwright, auth reuse, concurrency cap, the engineering loop, and
@@ -105,13 +105,11 @@ auth story (API key vs subscription volume), `--watch` ops, Discord checks, capt
 **Still ongoing:** re-tune when Claude Code TUI changes; optional declarative recognizer
 spec remains deferred (data-not-code where feasible, behind existing `Recognizer` API).
 
-#### P2.2 — npm publish of the remaining packages 🟡 (prep ✅ · publish gated)
-**Why:** `@termbridge/server` is published (M9); `@termbridge/mcp-server`/`core`/`orchestrator` are
-published but the broader publish set is **gated** (ask first — see `CLAUDE.md`).
-**Prep shipped:** `@termbridge/sandbox-e2b` has `files`/`publishConfig` (dist), version aligned to
-1.0.6, and is on the `scripts/publish-npm.ts` allowlist (after core; workspace deps rewritten at
-publish time). `claude-code-plugin` stays private.
-**Gate:** owner sign-off before any public npm publish / version tag.
+#### P2.2 — npm publish of the remaining packages 🟡→✅ at v1.0.7 (when tagged)
+**Why:** Ship the full public set including `@termbridge/sandbox-e2b`.
+**Shipped (code):** all packages at **1.0.7**; `sandbox-e2b` on `scripts/publish-npm.ts` allowlist;
+`claude-code-plugin` stays private. Release: tag `v1.0.7` → CI publish, or
+`bun scripts/publish-npm.ts` when logged in to npm.
 
 #### P2.3 — Concurrency / fleet observability ✅
 **Why:** An orchestrator spawns many sessions sharing one subscription; operators need to see cap
@@ -122,7 +120,9 @@ use + Hermes docs for caps / rate-limit backoff.
 
 ---
 
-### Phase 3 — Long term / exploratory
+### Phase 3 — Long term / exploratory 🔲 (optional — not required for v1 complete)
+
+v1 substrate is complete without these. Ports and polish only:
 
 - **Additional cloud providers** (Daytona, Cloudflare) behind the same `SandboxProvider` interface
   (D4) — a port, not a rewrite.

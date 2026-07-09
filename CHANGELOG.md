@@ -2,85 +2,44 @@
 
 ## Unreleased
 
-E2B sandbox cleanup on failure (no orphan sandboxes on the dashboard).
+(nothing yet)
 
-- **`E2BSandboxProvider.ensure`**: kills the cloud sandbox if tmux install/probe fails after create.
-- **`SandboxEnvironment.ensureSession`**: destroys the provider when `tmux new-session` fails.
-- **Smoke**: always `provider.destroy()` in `finally` (success and failure).
+## v1.0.7 — 2026-07-10
 
-Server/MCP auto-wire `env:"sandbox"` when `E2B_API_KEY` is set (roadmap P1.1 finish).
+Phase 1–2 substrate complete: live E2B sandbox, fleet observability, recognizer corpus,
+streamable-HTTP MCP, and publish set including `@termbridge/sandbox-e2b`.
 
-- **`sandboxProviderFromEnv()`** in `@termbridge/sandbox-e2b`.
-- **`@termbridge/server`** and **`@termbridge/mcp-server`** default managers enable
-  `E2BSandboxProvider` when the key is present (no custom wiring). Logs sandbox on/off at server start.
+### P1.1 — Live cloud SandboxProvider (E2B)
 
-Live E2B smoke proven + tmux install fix (roadmap P1.1).
+- **New `@termbridge/sandbox-e2b`**: `E2BSandboxProvider` against the E2B SDK; tmux via
+  `sudo -n apt-get` on non-root `base`; destroy double-kill; orphan cleanup on failed open.
+- **`SessionManager.sandboxProvider`** + MCP `open_session` enum `local|docker|sandbox`.
+- **Auto-wire:** server + mcp-server enable sandbox when `E2B_API_KEY` is set
+  (`sandboxProviderFromEnv()`).
+- Smoke: `scripts/smoke-sandbox-e2b.ts` (creds-gated; live proven).
 
-- **`E2BSandboxProvider.ensure`** installs tmux with `sudo -n apt-get` (E2B `base` user is
-  non-root) and fails loudly if tmux is still missing. Live
-  `scripts/smoke-sandbox-e2b.ts` green with real `E2B_API_KEY`.
+### P1.2 — Streamable-HTTP MCP (already in Unreleased from prior work)
 
-Hermes live-demo runbook polish (roadmap P1.4 — live gateway restart still operator-gated).
+- `POST/GET/DELETE /mcp` on the unified server; shared registry; token-gated.
+- `startServer` returns actual bound port.
 
-- `docs/demo/hermes-demo.md`: post-restart checklist, auth story, `--watch` ops, Discord checks,
-  capture template. `jira-ticket-prompt.md`: portable field checklist + setup flags.
+### P1.3 — Orchestrator factor (prior)
 
-npm publish prep for `@termbridge/sandbox-e2b` (roadmap P2.2 — **not published yet**).
+### P2.1 — Recognizer fixture corpus
 
-- Package is publish-ready (`files: dist`, `publishConfig`, public access); included in
-  `scripts/publish-npm.ts` allowlist. Actual `npm publish` remains owner-gated.
+- `__fixtures__/` + `corpus.guard.test.ts` drift guard.
 
-Fleet observability (roadmap P2.3).
+### P2.3 — Fleet observability
 
-- **`GET /api/sessions`** (token-gated): `maxSessions`/`count` plus per-session `holder`
-  (`agent`|`human`), `lastActivityAt`, and derived `status` (`idle`|`driving`|`human-takeover`).
-- **Core:** `Session.lockState()` and `SessionManager.capacity()` (no new state machines).
-- **Web client:** live session list panel (`N/max`, status badges, click to switch session).
-- Docs: Responsible use + Hermes safety/limits.
+- `GET /api/sessions` + web session list; `Session.lockState()` / `SessionManager.capacity()`.
 
-Recognizer screen fixture corpus + drift guard (roadmap P2.1).
+### P2.2 — Publish set
 
-- **`packages/core/src/recognizers/__fixtures__/`** — positive-match screen captures per
-  recognizer (incl. live Claude Code 2.1.183 permission captures).
-- **`corpus.guard.test.ts`** — every `*.txt` fixture must still match its recognizer;
-  fails loudly with path + kind on TUI drift. Declarative DSL deferred.
+- `@termbridge/sandbox-e2b` publish-ready and included in `scripts/publish-npm.ts`.
 
-Live cloud `SandboxProvider` (E2B) — `env:"sandbox"` is now selectable end-to-end (roadmap P1.1).
+### Docs
 
-- **New `@termbridge/sandbox-e2b`** package: `E2BSandboxProvider implements SandboxProvider`
-  against the E2B SDK. One provider instance provisions/execs/destroys exactly one E2B
-  sandbox (one sandbox == one session). `exec` maps the argv to the SDK's `commands.run`,
-  shell-quotes each arg, and catches `CommandExitError` so non-zero exits return as data
-  (never reject) — matching the `ExecFn` contract. tmux is installed on `ensure` (the
-  default `base` template lacks it). Every SDK call is behind an injectable
-  `sandboxFactory` so unit tests never touch the cloud.
-- **`SessionManager` gains a `sandboxProvider?: SandboxProvider` option.** With it set,
-  `env:"sandbox"` selects `SandboxEnvironment`; without it, `env:"sandbox"` throws a
-  typed `SandboxProviderNotConfiguredError` (code `sandbox_not_configured`) BEFORE any
-  sandbox spawns. Core stays dependency-free (D3) — only the new package imports `e2b`.
-- **MCP `open_session` enum** is now `local | docker | sandbox`.
-- Smoke: `scripts/smoke-sandbox-e2b.ts` (creds-gated; no-ops without `E2B_API_KEY`).
-- **Non-goal:** multi-provider fan-out (E2B first; Daytona/Cloudflare are Phase 3 ports).
-
-Streamable-HTTP MCP transport on the unified server (roadmap P1.2).
-
-- **`@termbridge/server` now speaks MCP over HTTP** at `POST/GET/DELETE /mcp` (the spec's
-  streamable-HTTP transport, via the SDK's `WebStandardStreamableHTTPServerTransport`). MCP clients
-  (Hermes, Claude Code, Cursor) can connect **directly** to the unified server over HTTP and share its
-  single `SessionManager` — so the browser watches *their* sessions natively, with no per-client stdio
-  proxy, and remote MCP clients work across a network boundary. Reuses `createServer` from
-  `@termbridge/mcp-server`, so the 13-tool surface is identical to stdio and `/api/tool` (no second tool
-  definition).
-- **Security unchanged:** `/mcp` is token-gated exactly like `/api/tool/:name` (bearer token, constant-time,
-  header-or-`?token=`; loopback bind by default). The transport runs stateful (one server+transport pair per
-  MCP client session, keyed by the `Mcp-Session-Id` header the SDK mints), supporting SSE streaming + the
-  initialize→DELETE lifecycle.
-- **stdio stays the zero-infra default** (non-goal: replacing it).
-- Smoke: `bun scripts/smoke-mcp-http.ts` (real tmux) — an HTTP MCP client opens a session, drives it, and
-  asserts the id is visible in the server's shared registry.
-- **Fix:** `startServer` now returns the actual bound port (`server.port`) instead of the requested one,
-  so `port: 0` (ephemeral) callers get the real port to reach the server (fixes `scripts/smoke-watch.ts`,
-  which built its base URL from the returned port).
+- Hermes demo runbook polish (P1.4 live demo remains operator-gated: gateway restart).
 
 ## v1.0.6 — 2026-06-24
 

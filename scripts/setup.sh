@@ -26,7 +26,7 @@
 set -euo pipefail
 
 # ---- config / defaults -------------------------------------------------------
-FALLBACK_VERSION="1.0.4"
+FALLBACK_VERSION="1.0.7"
 MODE="docker"
 VERSION=""
 MAX_SESSIONS="3"
