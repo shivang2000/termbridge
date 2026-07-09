@@ -1,0 +1,27 @@
+{
+	"name": "termbridge-sandbox",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-06-01",
+	"compatibility_flags": ["nodejs_compat"],
+	"containers": [
+		{
+			"class_name": "TermbridgeSandbox",
+			"image": "./Dockerfile",
+			"max_instances": 10
+		}
+	],
+	"durable_objects": {
+		"bindings": [
+			{
+				"class_name": "TermbridgeSandbox",
+				"name": "SANDBOX"
+			}
+		]
+	},
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": ["TermbridgeSandbox"]
+		}
+	]
+}

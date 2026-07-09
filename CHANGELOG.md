@@ -2,12 +2,13 @@
 
 ## Unreleased
 
-Live Daytona smoke + multi-provider smoke runner.
+Live Daytona smoke + multi-provider smoke runner + Cloudflare Containers control Worker.
 
 - **`createDaytonaClientFromEnv()`** (`@daytona/sdk`) + `scripts/smoke-sandbox-daytona.ts`
   (ephemeral sandbox, always `delete` in finally).
-- **`scripts/smoke-sandbox-cloudflare.ts`**: token verify + account Workers list (no
-  resources created — Containers need Wrangler).
+- **Cloudflare**: control Worker (`packages/sandbox-cloudflare/worker`) with
+  create/exec/destroy; `createCloudflareClientFromEnv()`; deploy script; smoke creates
+  a real container when `CLOUDFLARE_SANDBOX_WORKER_URL` is set (requires Workers Paid).
 - **`scripts/smoke-sandbox-all.ts`**: run all three smokes with `.env`.
 
 Phase 3 foundation — more sandbox providers, pluggable delivery, wake-on-event docs.

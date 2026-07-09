@@ -44,3 +44,4 @@ tmp/
 termbridge-*.png
 .playwright-mcp/
 .superpowers/
+packages/sandbox-cloudflare/worker/node_modules/

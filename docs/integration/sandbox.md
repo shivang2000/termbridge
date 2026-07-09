@@ -65,6 +65,14 @@ bun --env-file=.env scripts/smoke-sandbox-cloudflare.ts
 |---|---|---|
 | E2B | open + drive + registry + kill | `provider.destroy` + list verify 0 |
 | Daytona | open + drive + registry + kill (ephemeral sandbox) | `provider.destroy` → SDK `delete` |
-| Cloudflare | token active + account Workers API | **creates nothing** (Containers need Wrangler Worker) |
+| Cloudflare | full create/exec/destroy via control Worker | `provider.destroy` → Worker `/destroy` |
+
+### Cloudflare Containers setup
+
+1. **Workers Paid plan** (required): https://dash.cloudflare.com/?to=/:account/workers/plans
+2. Token: **Edit Cloudflare Workers** (+ Cloudchamber Edit if needed).
+3. Docker running.
+4. `bun --env-file=.env scripts/deploy-cloudflare-sandbox.ts`
+5. `bun --env-file=.env scripts/smoke-sandbox-cloudflare.ts`
 
 Without the relevant env keys each smoke no-ops and exits 0.
