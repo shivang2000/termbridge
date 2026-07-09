@@ -102,13 +102,13 @@ loop end to end.
 **Still ongoing:** re-tune when Claude Code TUI changes; optional declarative recognizer
 spec remains deferred (data-not-code where feasible, behind existing `Recognizer` API).
 
-#### P2.2 — npm publish of the remaining packages 🟡
+#### P2.2 — npm publish of the remaining packages 🟡 (prep ✅ · publish gated)
 **Why:** `@termbridge/server` is published (M9); `@termbridge/mcp-server`/`core`/`orchestrator` are
 published but the broader publish set is **gated** (ask first — see `CLAUDE.md`).
-**Scope:**
-- Finalize the publish allowlist + `files` whitelists; version coordination via the release
-  pipeline.
-- **Gate:** owner sign-off before any public npm publish beyond the current set.
+**Prep shipped:** `@termbridge/sandbox-e2b` has `files`/`publishConfig` (dist), version aligned to
+1.0.6, and is on the `scripts/publish-npm.ts` allowlist (after core; workspace deps rewritten at
+publish time). `claude-code-plugin` stays private.
+**Gate:** owner sign-off before any public npm publish / version tag.
 
 #### P2.3 — Concurrency / fleet observability ✅
 **Why:** An orchestrator spawns many sessions sharing one subscription; operators need to see cap

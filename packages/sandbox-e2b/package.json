@@ -1,11 +1,25 @@
 {
 	"name": "@termbridge/sandbox-e2b",
-	"version": "0.0.0",
-	"private": true,
+	"version": "1.0.6",
 	"type": "module",
 	"license": "MIT",
+	"description": "E2B SandboxProvider for termbridge — env:\"sandbox\" isolation via the E2B cloud SDK",
 	"exports": {
 		".": "./src/index.ts"
+	},
+	"files": [
+		"dist"
+	],
+	"publishConfig": {
+		"access": "public",
+		"main": "./dist/index.js",
+		"types": "./dist/index.d.ts",
+		"exports": {
+			".": {
+				"types": "./dist/index.d.ts",
+				"import": "./dist/index.js"
+			}
+		}
 	},
 	"scripts": {
 		"build": "tsc -p tsconfig.build.json",

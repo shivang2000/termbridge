@@ -7,13 +7,29 @@
 // (token must be in ~/.npmrc, or pass --otp via npm):
 //   bun scripts/publish-npm.ts
 // Build first: bunx turbo run build --filter=@termbridge/core … (this script does it).
+//
+// GATED: do not run without owner sign-off. sandbox-e2b is included in the
+// allowlist (P2.2 prep) but still requires an explicit publish decision.
 
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-const PKGS = ["core", "mcp-server", "orchestrator"]; // dependency order: core first
+// dependency order: core first, then packages that depend on it
+const PKGS = ["core", "mcp-server", "orchestrator", "sandbox-e2b"];
 const root = process.cwd();
+
+function rewriteWorkspaceDeps(pkg: Record<string, unknown>, version: string): void {
+	for (const depField of ["dependencies", "devDependencies", "peerDependencies"] as const) {
+		const deps = pkg[depField] as Record<string, string> | undefined;
+		if (!deps) continue;
+		for (const [name, val] of Object.entries(deps)) {
+			if (val === "workspace:*" || val.startsWith("workspace:")) {
+				deps[name] = `^${version}`;
+			}
+		}
+	}
+}
 
 // Fresh dist (excludes tests via tsconfig.build.json).
 console.log("[npm] building…");
@@ -41,6 +57,7 @@ for (const p of PKGS) {
 	for (const k of ["main", "types", "exports", "bin"] as const) {
 		if (pc[k] !== undefined) j[k] = pc[k];
 	}
+	rewriteWorkspaceDeps(j, j.version);
 	// Idempotent: skip a version that is already on the registry (safe CI re-runs).
 	let already = false;
 	try {
@@ -105,16 +122,7 @@ for (const p of PKGS) {
 		// Rewrite workspace:* → ^<version> for npm compatibility.
 		const published = JSON.parse(orig);
 		delete published.private;
-		for (const depField of ["dependencies", "devDependencies", "peerDependencies"] as const) {
-			const deps = published[depField] as Record<string, string> | undefined;
-			if (!deps) continue;
-			for (const [name, val] of Object.entries(deps)) {
-				if (val === "workspace:*" || val.startsWith("workspace:")) {
-					// Use the same version as this package (all @termbridge/* travel together).
-					deps[name] = `^${version}`;
-				}
-			}
-		}
+		rewriteWorkspaceDeps(published, version);
 
 		writeFileSync(pkgPath, `${JSON.stringify(published, null, "\t")}\n`);
 		try {

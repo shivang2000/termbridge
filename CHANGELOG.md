@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+npm publish prep for `@termbridge/sandbox-e2b` (roadmap P2.2 — **not published yet**).
+
+- Package is publish-ready (`files: dist`, `publishConfig`, public access); included in
+  `scripts/publish-npm.ts` allowlist. Actual `npm publish` remains owner-gated.
+
 Fleet observability (roadmap P2.3).
 
 - **`GET /api/sessions`** (token-gated): `maxSessions`/`count` plus per-session `holder`
