@@ -15,11 +15,10 @@ export interface CreateCloudflareClientOptions {
 export function createCloudflareClientFromEnv(
 	opts: CreateCloudflareClientOptions = {},
 ): CloudflareSandboxClient {
-	const base = (
-		opts.workerUrl ??
-		process.env.CLOUDFLARE_SANDBOX_WORKER_URL ??
-		""
-	).replace(/\/$/, "");
+	const base = (opts.workerUrl ?? process.env.CLOUDFLARE_SANDBOX_WORKER_URL ?? "").replace(
+		/\/$/,
+		"",
+	);
 	const token =
 		opts.controlToken ??
 		process.env.CLOUDFLARE_CONTROL_TOKEN ??
@@ -34,10 +33,7 @@ export function createCloudflareClientFromEnv(
 		throw new Error("CLOUDFLARE_CONTROL_TOKEN (or CLOUDFLARE_API_TOKEN) is required");
 	}
 
-	async function call(
-		path: string,
-		init?: RequestInit,
-	): Promise<Record<string, unknown>> {
+	async function call(path: string, init?: RequestInit): Promise<Record<string, unknown>> {
 		const res = await fetch(`${base}${path}`, {
 			...init,
 			headers: {
@@ -48,9 +44,7 @@ export function createCloudflareClientFromEnv(
 		});
 		const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
 		if (!res.ok) {
-			throw new Error(
-				`Cloudflare control ${path} → ${res.status}: ${JSON.stringify(body)}`,
-			);
+			throw new Error(`Cloudflare control ${path} → ${res.status}: ${JSON.stringify(body)}`);
 		}
 		return body;
 	}

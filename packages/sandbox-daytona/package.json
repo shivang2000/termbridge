@@ -37,6 +37,8 @@
 		"@daytona/sdk": ">=0.100.0"
 	},
 	"peerDependenciesMeta": {
-		"@daytona/sdk": { "optional": true }
+		"@daytona/sdk": {
+			"optional": true
+		}
 	}
 }

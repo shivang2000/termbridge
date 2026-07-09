@@ -24,16 +24,27 @@ export async function createDaytonaClientFromEnv(
 	const { Daytona } = await import("@daytona/sdk");
 	const daytona = new Daytona({
 		apiKey,
-		...(opts.apiUrl ?? process.env.DAYTONA_API_URL
+		...((opts.apiUrl ?? process.env.DAYTONA_API_URL)
 			? { apiUrl: opts.apiUrl ?? process.env.DAYTONA_API_URL }
 			: {}),
-		...(opts.target ?? process.env.DAYTONA_TARGET
+		...((opts.target ?? process.env.DAYTONA_TARGET)
 			? { target: opts.target ?? process.env.DAYTONA_TARGET }
 			: {}),
 	});
 
 	/** Live sandbox handles keyed by id for exec/destroy. */
-	const live = new Map<string, { delete: (t?: number) => Promise<void>; process: { executeCommand: (cmd: string, cwd?: string) => Promise<{ exitCode: number; result: string }> } }>();
+	const live = new Map<
+		string,
+		{
+			delete: (t?: number) => Promise<void>;
+			process: {
+				executeCommand: (
+					cmd: string,
+					cwd?: string,
+				) => Promise<{ exitCode: number; result: string }>;
+			};
+		}
+	>();
 
 	const client: DaytonaClient = {
 		async create(o) {

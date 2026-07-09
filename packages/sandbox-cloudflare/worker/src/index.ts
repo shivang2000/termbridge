@@ -82,10 +82,7 @@ export default {
 							killSandbox: () => Promise<void>;
 						}
 					).killSandbox();
-					return Response.json(
-						{ ok: false, error: "boot_failed", detail: probe },
-						{ status: 500 },
-					);
+					return Response.json({ ok: false, error: "boot_failed", detail: probe }, { status: 500 });
 				}
 				return Response.json({ ok: true, id, probe });
 			}

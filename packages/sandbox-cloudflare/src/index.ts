@@ -1,10 +1,10 @@
 // Public barrel for @termbridge/sandbox-cloudflare.
 export {
-	CloudflareSandboxProvider,
 	type CloudflareSandboxClient,
+	CloudflareSandboxProvider,
 	type CloudflareSandboxProviderOptions,
 } from "./cloudflare-provider.js";
 export {
-	createCloudflareClientFromEnv,
 	type CreateCloudflareClientOptions,
+	createCloudflareClientFromEnv,
 } from "./from-env.js";
