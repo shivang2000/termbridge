@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+Live E2B smoke proven + tmux install fix (roadmap P1.1).
+
+- **`E2BSandboxProvider.ensure`** installs tmux with `sudo -n apt-get` (E2B `base` user is
+  non-root) and fails loudly if tmux is still missing. Live
+  `scripts/smoke-sandbox-e2b.ts` green with real `E2B_API_KEY`.
+
 Hermes live-demo runbook polish (roadmap P1.4 — live gateway restart still operator-gated).
 
 - `docs/demo/hermes-demo.md`: post-restart checklist, auth story, `--watch` ops, Discord checks,

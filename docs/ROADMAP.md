@@ -46,7 +46,7 @@ live Hermes drives). CI gates typecheck/lint/test on push/PR.
 
 ### Phase 1 — Near term (finish the substrate's open seams)
 
-#### P1.1 — Live cloud `SandboxProvider` (E2B) ✅ / 🟡 live-cloud-smoke pending creds
+#### P1.1 — Live cloud `SandboxProvider` (E2B) ✅
 **Why:** The `SandboxEnvironment` interface and unit tests shipped (M6), but the
 `sandbox` env kind was **not selectable** over the default factory / MCP enum because
 there was no concrete provider. This closes the strongest-isolation path for
@@ -55,8 +55,9 @@ untrusted/multi-tenant fleets (D4).
 unit tests); `SessionManagerOptions.sandboxProvider` makes `env:"sandbox"` select
 `SandboxEnvironment` (throws `SandboxProviderNotConfiguredError` when unset); MCP
 `open_session` enum is now `local|docker|sandbox`. Smoke
-`scripts/smoke-sandbox-e2b.ts` (creds-gated). Core stays dependency-free (D3).
-**Pending:** live cloud smoke needs `E2B_API_KEY` creds.
+`scripts/smoke-sandbox-e2b.ts` (creds-gated) — **live cloud smoke proven** (open +
+drive + registry + close). tmux install uses passwordless `sudo` on the E2B `base`
+template (non-root user). Core stays dependency-free (D3).
 **Non-goal:** multi-provider fan-out in v1 — one concrete provider first.
 
 #### P1.2 — Streamable-HTTP MCP transport on `@termbridge/server` ✅

@@ -91,8 +91,11 @@ describe("E2BSandboxProvider", () => {
 		expect(m.createCalls[0]?.apiKey).toBe("k");
 		expect(m.createCalls[0]?.timeoutMs).toBe(1000);
 		expect(m.createCalls[0]?.metadata).toEqual({ name: "sess" });
-		expect(m.runCalls.length).toBeGreaterThanOrEqual(1);
+		// install probe + verify probe (both mention tmux)
+		expect(m.runCalls.length).toBeGreaterThanOrEqual(2);
 		expect(m.runCalls[0]).toContain("tmux");
+		expect(m.runCalls[0]).toContain("sudo -n");
+		expect(m.runCalls[1]).toContain("command -v tmux");
 	});
 	it("ensure defaults apiKey to E2B_API_KEY env when not passed", async () => {
 		process.env.E2B_API_KEY = "env-key";
@@ -119,7 +122,12 @@ describe("E2BSandboxProvider", () => {
 		expect(m.runCalls[m.runCalls.length - 1]).toContain("list-sessions");
 	});
 	it("exec returns non-zero exit as DATA, not a throw (catches CommandExitError)", async () => {
-		const m = makeMockFactory([{ exitCode: 1, stdout: "", stderr: "no server" }]);
+		// ensure: install ok + probe ok; then exec fails with CommandExitError
+		const m = makeMockFactory([
+			{ exitCode: 0, stdout: "", stderr: "" },
+			{ exitCode: 0, stdout: "/usr/bin/tmux", stderr: "" },
+			{ exitCode: 1, stdout: "", stderr: "no server" },
+		]);
 		const p = new E2BSandboxProvider({ apiKey: "k", sandboxFactory: m.sandboxFactory });
 		await p.ensure({ name: "s", cwd: "/w" });
 		const res = await p.exec(["tmux", "-L", "termbridge", "list-sessions"]);

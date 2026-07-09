@@ -83,11 +83,21 @@ export class E2BSandboxProvider implements SandboxProvider {
 			timeoutMs: this.timeoutMs,
 			metadata: { name: opts.name },
 		});
-		// The E2B `base` template does NOT ship tmux; install it on first ensure so
-		// SandboxEnvironment.ensureSession can run tmux new-session. Idempotent probe.
-		await this.execRaw(
-			"command -v tmux >/dev/null 2>&1 || (apt-get update -y && apt-get install -y tmux)",
+		// The E2B `base` template does NOT ship tmux, and the default user is
+		// non-root (uid 1000, in the sudo group). Install with passwordless sudo
+		// so SandboxEnvironment.ensureSession can run tmux new-session.
+		const install = await this.execRaw(
+			"command -v tmux >/dev/null 2>&1 || (sudo -n apt-get update -y && sudo -n apt-get install -y tmux)",
 		);
+		if (install.code !== 0) {
+			throw new Error(
+				`E2BSandboxProvider: failed to install tmux (exit ${install.code}): ${install.stderr || install.stdout}`,
+			);
+		}
+		const probe = await this.execRaw("command -v tmux");
+		if (probe.code !== 0) {
+			throw new Error("E2BSandboxProvider: tmux still missing after install");
+		}
 	}
 
 	async exec(args: string[]): Promise<ExecResult> {
