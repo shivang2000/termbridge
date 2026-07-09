@@ -74,11 +74,7 @@ export function createTermbridgeServer(opts: TermbridgeServerOptions): Termbridg
 			const holder = lock === "human-active" ? "human" : "agent";
 			const lastActivityAt = session?.lastActivityAt?.() ?? 0;
 			const status =
-				holder === "human"
-					? "human-takeover"
-					: now - lastActivityAt < IDLE_MS
-						? "driving"
-						: "idle";
+				holder === "human" ? "human-takeover" : now - lastActivityAt < IDLE_MS ? "driving" : "idle";
 			return {
 				id: info.id,
 				name: info.name,
