@@ -58,27 +58,26 @@ the strongest-isolation path for untrusted/multi-tenant fleets (D4).
 **Unblock:** obtain provider creds; document provider selection.
 **Non-goal:** multi-provider fan-out in v1 — one concrete provider first.
 
-#### P1.2 — Streamable-HTTP MCP transport on `@termbridge/server` 🔲
+#### P1.2 — Streamable-HTTP MCP transport on `@termbridge/server` ✅
 **Why:** Today the browser watches Hermes-driven sessions via **stdio proxy mode** (M9). A
 streamable-HTTP MCP transport on the unified server lets MCP clients (Hermes, Claude Code, Cursor)
 connect **directly** to the server over HTTP — sharing its single `SessionManager`, so the browser
 watches *their* sessions natively (no per-client proxy), and remote MCP clients work across a
 network boundary.
-**Scope:**
-- Implement the MCP streamable-HTTP transport on the existing Bun+Hono server (reuse the bearer
-  token + Origin allowlist + loopback security model).
-- Register the 13-tool surface against the server's shared `SessionManager`.
-- Smoke: an HTTP MCP client drives a session while a browser watches it (one registry).
-**Non-goal:** replacing stdio — stdio stays the zero-infra default.
+**Shipped:** `POST/GET/DELETE /mcp` on the unified server (SDK `WebStandardStreamableHTTPServerTransport`,
+stateful per MCP client session), reusing `createServer` from `@termbridge/mcp-server` so the 13-tool
+surface is identical to stdio + `/api/tool`. Token-gated like `/api/tool/:name` (no new security surface);
+loopback bind by default. Smoke: `scripts/smoke-mcp-http.ts` (real tmux, shared-registry proof). **stdio
+stays the zero-infra default** (non-goal: replacing it).
 
-#### P1.3 — Factor `@termbridge/orchestrator` 🟡
-**Why:** `runEngineerLoop` is a ~20KB single module mixing loop control, progress digesting,
+#### P1.3 — Factor `@termbridge/orchestrator` ✅
+**Why:** `runEngineerLoop` was a ~20KB single module mixing loop control, progress digesting,
 auto-approval, and delivery. Factoring it makes the consumer-side loop easier to extend (new
 acceptance strategies, delivery targets) and keeps D8 (not an orchestrator) clean.
-**Scope:**
-- Split into focused modules (e.g. loop driver, digest, auto-approve glue, delivery) behind the
-  existing `runEngineerLoop` public API — no breaking change to callers.
-- Keep the existing `engineer-loop.test.ts` green as a regression gate.
+**Shipped:** `engineer-loop.ts` (497 lines) split into `types.ts` (interfaces), `parse.ts` (pure
+helpers + sentinels), `prompt.ts` (prompt builders), and `approve.ts` (in-session approval glue);
+`engineer-loop.ts` is now the ~250-line loop driver and re-exports the full public surface so the
+test file and package barrel are byte-for-byte unchanged (regression proof). 26 orchestrator tests green.
 
 #### P1.4 — Discord / Hermes live demo finish 🔲
 **Why:** The engineer-loop + `engineer-loop` skill + `setup.sh --watch` are built; the remaining

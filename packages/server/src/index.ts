@@ -9,6 +9,8 @@ export type { Bridge, BridgeSessionView, ClientFrame, ServerFrame, WsLike } from
 export { createBridge } from "./bridge.js";
 export type { ToolDispatch, ToolResult } from "./http-tools.js";
 export { createToolDispatch } from "./http-tools.js";
+export type { McpHttpHandler, McpHttpHandlerOptions } from "./mcp-http.js";
+export { createMcpHttpHandler } from "./mcp-http.js";
 export type { TermbridgeServer, TermbridgeServerOptions } from "./server.js";
 export { createTermbridgeServer } from "./server.js";
 
@@ -33,14 +35,21 @@ export function startServer(opts: StartOptions = {}) {
 		`http://127.0.0.1:${port}`,
 		`http://${host}:${port}`,
 	];
-	const { app, websocket } = createTermbridgeServer({
+	const { app, websocket, mcp } = createTermbridgeServer({
 		manager,
 		token,
 		allowedOrigins,
 		clientDir: opts.clientDir,
 	});
 	const server = Bun.serve({ port, hostname: host, fetch: app.fetch, websocket });
-	return { server, manager, port, host, token };
+	// Return the ACTUAL bound port (server.port), not the requested one — when
+	// port:0 (ephemeral) is requested by tests/smokes the caller needs the real
+	// port to reach the server. NOTE: allowedOrigins above were computed from the
+	// requested port; with port:0 they carry :0 and won't match a real browser
+	// origin — acceptable because port:0 is a test/smoke-only pattern
+	// (programmatic clients, no browser WS); real browser access always uses a
+	// fixed port (8787 / PORT), where the origins match.
+	return { server, manager, port: server.port, host, token, mcp };
 }
 
 if (import.meta.main) {

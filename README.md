@@ -130,9 +130,12 @@ failing test, host-verified). ~900 unit tests; real tmux / Docker / MCP / web (P
 concurrency / engineer-loop / docker-only-guard / Hermes smokes all green; CI gates typecheck+lint+test.
 Published image: `shivang2000/termbridge:1.0.1` (+ `:latest`). See [CHANGELOG](CHANGELOG.md).
 
-Optional/not-yet-shipped: a concrete cloud sandbox provider (E2B — needs creds), and a streamable-HTTP MCP
-transport on `packages/server` (today it speaks the custom `/api/tool` HTTP API; MCP clients use the stdio
-server).
+Optional/not-yet-shipped: a concrete cloud sandbox provider (E2B — needs creds).
+
+The unified server now also speaks the **MCP streamable-HTTP transport** at `POST/GET/DELETE /mcp`
+(P1.2) — token-gated exactly like `/api/tool`. MCP clients (Hermes, Claude Code, Cursor) can connect
+**directly** over HTTP and share the browser's single session registry (no per-client stdio proxy); see
+[Usage A′](#a-give-claude-code-or-any-mcp-client-the-tools--http-streamable-http-mcp) below.
 
 ## Requirements
 
@@ -224,6 +227,26 @@ claude mcp add termbridge \
 ```
 
 The agent then calls `open_session`, `send_text`, `wait_for_idle`, `read_screen`, … (full list below).
+
+### A′) Give Claude Code (or any MCP client) the tools — HTTP (streamable-HTTP MCP)
+
+Connect an MCP client **directly** to the unified server over HTTP — the client shares the server's single
+`SessionManager`, so the browser watches the agent's sessions natively (no per-client stdio proxy). First
+start the server (see [B](#b-watch--intervene-from-a-browser--the-unified-server)):
+
+```bash
+TERMBRIDGE_HOME=~/.termbridge/home bun packages/server/src/index.ts
+# prints:  [termbridge] server on http://127.0.0.1:8787  (token: <TOKEN>)
+```
+
+Then register the HTTP MCP endpoint (the bearer token reuses the server's existing token gate):
+
+```bash
+claude mcp add --transport http termbridge http://127.0.0.1:8787/mcp \
+  --header "Authorization: Bearer <TOKEN>"
+```
+
+The same 13 tools are exposed; `stdio` (above) remains the zero-infra default.
 
 ### B) Watch + intervene from a browser — the unified server
 
