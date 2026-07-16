@@ -31,7 +31,7 @@
 		"@termbridge/core": "workspace:*"
 	},
 	"devDependencies": {
-		"@daytona/sdk": "^0.195.0"
+		"@daytona/sdk": "^0.198.0"
 	},
 	"peerDependencies": {
 		"@daytona/sdk": ">=0.100.0"
