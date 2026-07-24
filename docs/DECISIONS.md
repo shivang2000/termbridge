@@ -66,6 +66,14 @@ isolation, so untrusted/multi-tenant use must be steered to Docker (or cloud san
 
 ---
 
+## Note on numbering
+
+This file holds **D1–D4 only**. D5, D6, D7, and D8 were never authored — any reference to "D1–D8" is a
+documentation error. Forward decisions live in the V2 register (`docs/ROADMAP-V2.md` §5, V2-D1–V2-D17)
+and are copied here with accepted status by Phase 0 Task 2B.
+
+---
+
 ## Defaults chosen by the assistant (open to change)
 - **Repo/product name:** `termbridge` (placeholder).
 - **GitHub:** pushed to `shivang2000`, **private** visibility (flip to public anytime).
