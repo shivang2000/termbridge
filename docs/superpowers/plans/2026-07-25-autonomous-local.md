@@ -117,7 +117,7 @@ what gets committed — history records one accepted baseline, not an accepted-t
 `docs/DECISIONS.md` and `CLAUDE.md` join the commit because the same audit corrected the ADR numbering
 in both.
 
-- [ ] **Step 1: Stage all six V2 documents**
+- [x] **Step 1: Stage all six V2 documents**
 
 Run:
 
@@ -134,7 +134,7 @@ git diff --cached --name-only
 
 Expected: exactly the eight listed paths, with no other staged file.
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git commit -m "docs: accept v2 roadmap, autonomous local design, plan, and research"
