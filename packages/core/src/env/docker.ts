@@ -85,7 +85,7 @@ export class DockerEnvironment implements Environment {
 			"/dev/null",
 		]);
 		if (run.code !== 0) {
-			throw new Error("docker run failed: " + run.stderr);
+			throw new Error(`docker run failed: ${run.stderr}`);
 		}
 
 		// 2) Create the detached tmux session inside the container.
@@ -116,7 +116,7 @@ export class DockerEnvironment implements Environment {
 			} catch {
 				// Swallow: cleanup is best-effort; the new-session failure is what matters.
 			}
-			throw new Error("tmux new-session failed: " + newSession.stderr);
+			throw new Error(`tmux new-session failed: ${newSession.stderr}`);
 		}
 
 		this.container = container;

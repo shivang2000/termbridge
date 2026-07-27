@@ -6,7 +6,7 @@
 // reuses them by setting HOME to that volume, so usage bills against the
 // subscription plan rather than the metered API.
 
-import { existsSync, mkdirSync, statSync } from "node:fs";
+import { mkdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 export interface AuthProvisionerOptions {

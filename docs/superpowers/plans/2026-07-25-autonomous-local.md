@@ -240,7 +240,7 @@ warning + 2 infos" in the older roadmap snapshot — that count is stale).
 
 - Produces: zero-diagnostic `bun run lint`.
 
-- [ ] **Step 1: Capture current lint output with file paths**
+- [x] **Step 1: Capture current lint output with file paths**
 
 Run:
 
@@ -250,7 +250,7 @@ bun --silent run lint 2>&1 | grep -oE '[a-z./-]+\.ts:[0-9]+:[0-9]+' | sort -u
 
 Expected: exactly the four paths listed above (or their current equivalents if the snapshot drifted).
 
-- [ ] **Step 2: Fix only reported diagnostics in each named file**
+- [x] **Step 2: Fix only reported diagnostics in each named file**
 
 - `provisioner.ts`: remove the unused `existsSync`/`mkdirSync`/`statSync` imports that Biome flags.
 - `docker.ts`: fix the two optional-chain/style diagnostics at the reported lines.
@@ -260,13 +260,13 @@ Expected: exactly the four paths listed above (or their current equivalents if t
 Do not mix structural refactoring into this task. If a diagnostic is in a file not listed above, stop and
 record the drift before editing — the baseline may have changed.
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 Run: `bun run lint && bun run typecheck && bun test`
 
 Expected: zero lint diagnostics (0 warnings, 0 infos), clean typecheck, and all existing tests pass.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add packages/core/src/auth/provisioner.ts packages/core/src/env/docker.ts \

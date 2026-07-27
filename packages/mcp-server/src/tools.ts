@@ -17,6 +17,10 @@ export interface ToolSpec {
 	name: string;
 	description: string;
 	inputSchema: z.ZodRawShape;
+	// Handlers receive zod-validated args; per-tool arg shapes are typed properly in Task
+	// 12A's generated adapter. Casting all 13 handlers in Task 2A would be a structural
+	// refactor, not lint debt — suppress with this note as the documented exception.
+	// biome-ignore lint/suspicious/noExplicitAny: zod-boundary args; per-tool types land in Task 12A
 	handler: (args: any) => Promise<unknown>;
 }
 

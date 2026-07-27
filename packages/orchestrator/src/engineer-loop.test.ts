@@ -31,8 +31,7 @@ function mockTools(script: Script): {
 	let pi = 0;
 	let si = 0;
 	let offset = 0;
-	const last = <T>(a: T[] | undefined): T | undefined =>
-		a && a.length ? a[a.length - 1] : undefined;
+	const last = <T>(a: T[] | undefined): T | undefined => (a?.length ? a[a.length - 1] : undefined);
 	const tools: ToolCall = async (name, args) => {
 		calls.push({ name, args });
 		switch (name) {
