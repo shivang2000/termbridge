@@ -1,0 +1,236 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://termbridge.dev/schemas/autonomous-local-benchmark-manifest.schema.json",
+	"title": "Autonomous Local benchmark manifest",
+	"description": "Versioned schema for the 20-task x 3-attempt x 2-CLI benchmark matrix. Cross-reference rules (unique fixtures, dangling references, scenario/category coverage) are enforced by manifest.schema.test.ts alongside this schema.",
+	"type": "object",
+	"additionalProperties": false,
+	"required": ["schema_version", "budget", "run_modes", "fixtures", "cases"],
+	"definitions": {
+		"sha40": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+		"sha256hex": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+		"fixture": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["id", "url", "commit_sha", "license", "content_sha256", "image"],
+			"properties": {
+				"id": { "type": "string", "minLength": 1 },
+				"url": { "type": "string", "pattern": "^https://" },
+				"commit_sha": { "$ref": "#/definitions/sha40" },
+				"license": {
+					"type": "string",
+					"pattern": "^[A-Za-z0-9-.+]+$",
+					"description": "SPDX license identifier (e.g. MIT, Apache-2.0, BSD-3-Clause)"
+				},
+				"content_sha256": { "$ref": "#/definitions/sha256hex" },
+				"image": {
+					"type": "string",
+					"pattern": "^\\S+@sha256:[0-9a-f]{64}$",
+					"description": "Container image pinned by digest; bare tags are rejected"
+				}
+			}
+		},
+		"case": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": [
+				"id",
+				"title",
+				"fixture_id",
+				"grader_category",
+				"critical_scenario",
+				"task",
+				"runtime",
+				"intervention",
+				"grader",
+				"time_limit_seconds",
+				"cost_ceiling_usd",
+				"rubrics",
+				"evidence_required",
+				"budgets",
+				"infrastructure_invalid_classification"
+			],
+			"properties": {
+				"id": { "type": "string", "minLength": 1 },
+				"title": { "type": "string", "minLength": 1 },
+				"fixture_id": { "type": "string", "minLength": 1 },
+				"grader_category": {
+					"enum": [
+						"localized_fix",
+						"multi_file_feature",
+						"api_change",
+						"migration",
+						"frontend_e2e",
+						"configuration_change",
+						"diagnosis",
+						"security_validation",
+						"clarification",
+						"intentionally_unsafe_request"
+					]
+				},
+				"critical_scenario": {
+					"enum": [
+						"plan_rejection",
+						"stale_approval",
+						"attempted_planning_mutation",
+						"permission_scope",
+						"human_takeover_and_return",
+						"daemon_death_at_operation_boundary",
+						"secret_canary",
+						"auth_expiry",
+						"tracker_revocation",
+						"duplicate_webhook",
+						"out_of_order_webhook",
+						"rate_limit",
+						"lost_event_consumer",
+						"interrupted_dirty_worktree",
+						"blocking_review",
+						"uncertain_push_pr_creation",
+						"branch_tampering",
+						"runtime_conflict",
+						null
+					]
+				},
+				"task": {
+					"type": "object",
+					"additionalProperties": false,
+					"required": ["statement", "acceptance_criteria", "setup"],
+					"properties": {
+						"statement": { "type": "string", "minLength": 1 },
+						"acceptance_criteria": {
+							"type": "array",
+							"minItems": 1,
+							"items": { "type": "string", "minLength": 1 }
+						},
+						"setup": { "type": "string" }
+					}
+				},
+				"runtime": {
+					"type": "object",
+					"additionalProperties": false,
+					"required": [
+						"cli_targets",
+						"cli_binary",
+						"cli_build",
+						"adapter_version",
+						"adapter_schema_hash",
+						"model",
+						"settings",
+						"termbridge_sha",
+						"environment_provider",
+						"network_policy"
+					],
+					"properties": {
+						"cli_targets": {
+							"type": "array",
+							"minItems": 1,
+							"items": { "enum": ["claude-code", "opencode"] }
+						},
+						"cli_binary": { "type": "string", "minLength": 1 },
+						"cli_build": { "type": "string", "minLength": 1 },
+						"adapter_version": { "type": "string", "minLength": 1 },
+						"adapter_schema_hash": { "$ref": "#/definitions/sha256hex" },
+						"model": { "type": "string", "minLength": 1 },
+						"settings": { "type": "object" },
+						"termbridge_sha": { "$ref": "#/definitions/sha40" },
+						"environment_provider": { "enum": ["local", "docker", "e2b"] },
+						"network_policy": { "enum": ["offline", "allowlist", "open"] }
+					}
+				},
+				"intervention": {
+					"type": "object",
+					"additionalProperties": false,
+					"required": ["kind", "injection_point", "script"],
+					"properties": {
+						"kind": { "enum": ["none", "scripted", "fault"] },
+						"injection_point": { "type": "string" },
+						"script": { "type": "string" }
+					}
+				},
+				"grader": {
+					"type": "object",
+					"additionalProperties": false,
+					"required": ["kind", "command", "expected"],
+					"properties": {
+						"kind": { "enum": ["command", "test_suite", "diff_check", "state_check"] },
+						"command": { "type": "string", "minLength": 1 },
+						"expected": { "type": "string", "minLength": 1 }
+					}
+				},
+				"time_limit_seconds": { "type": "integer", "minimum": 60 },
+				"cost_ceiling_usd": { "type": "number", "exclusiveMinimum": 0 },
+				"rubrics": {
+					"type": "object",
+					"additionalProperties": false,
+					"required": ["success", "policy_violations"],
+					"properties": {
+						"success": {
+							"type": "array",
+							"minItems": 1,
+							"items": { "type": "string", "minLength": 1 }
+						},
+						"policy_violations": {
+							"type": "array",
+							"items": { "type": "string", "minLength": 1 }
+						}
+					}
+				},
+				"evidence_required": {
+					"type": "array",
+					"minItems": 1,
+					"items": { "type": "string", "minLength": 1 }
+				},
+				"budgets": {
+					"type": "object",
+					"additionalProperties": false,
+					"required": ["elapsed_seconds_max", "usage_proxy"],
+					"properties": {
+						"elapsed_seconds_max": { "type": "integer", "minimum": 60 },
+						"usage_proxy": { "type": "string", "minLength": 1 }
+					}
+				},
+				"infrastructure_invalid_classification": {
+					"enum": ["retryable", "excluded_from_score", "counted"]
+				}
+			}
+		}
+	},
+
+	"properties": {
+		"schema_version": { "const": 1 },
+		"budget": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": [
+				"per_cli_wall_clock_minutes",
+				"per_cli_cost_ceiling_usd",
+				"infrastructure_invalid_rerun_rate_cap"
+			],
+			"properties": {
+				"per_cli_wall_clock_minutes": { "type": "integer", "minimum": 1 },
+				"per_cli_cost_ceiling_usd": { "type": "number", "exclusiveMinimum": 0 },
+				"infrastructure_invalid_rerun_rate_cap": { "type": "number", "minimum": 0, "maximum": 1 }
+			}
+		},
+		"run_modes": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["stable_matrix", "latest_upstream_canary", "nightly_smoke"],
+			"properties": {
+				"stable_matrix": { "type": "string", "minLength": 1 },
+				"latest_upstream_canary": { "type": "string", "minLength": 1 },
+				"nightly_smoke": { "type": "string", "minLength": 1 }
+			}
+		},
+		"fixtures": {
+			"type": "array",
+			"minItems": 4,
+			"items": { "$ref": "#/definitions/fixture" }
+		},
+		"cases": {
+			"type": "array",
+			"minItems": 20,
+			"items": { "$ref": "#/definitions/case" }
+		}
+	}
+}

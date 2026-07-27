@@ -387,20 +387,20 @@ git commit -m "docs: add local threat model"
 - Produces: a declared fixture set with license, commit SHA, content hash, and container digest.
 - Produces: a budget policy document declaring per-CLI wall-clock and provider-cost ceilings.
 
-- [ ] **Step 1: Install the schema validator and write the failing test**
+- [x] **Step 1: Install the schema validator and write the failing test**
 
 Run: `bun add --dev ajv@8.17.1`
 
 Create `manifest.schema.test.ts` using Ajv. Assert a complete case passes and that unknown keys, missing
 license/SHA/hash/digest, missing deterministic grader, and missing predeclared cost ceiling fail.
 
-- [ ] **Step 2: Run the test before creating the schema**
+- [x] **Step 2: Run the test before creating the schema**
 
 Run: `bun test benchmarks/autonomous-local/manifest.schema.test.ts`
 
 Expected: FAIL because `manifest.schema.json` does not exist.
 
-- [ ] **Step 3: Write the manifest schema**
+- [x] **Step 3: Write the manifest schema**
 
 Define a JSON Schema requiring, per case: fixture repository archive/commit, license, content hash,
 container image digest; task, acceptance criteria, setup, deterministic grader, time limit; CLI binary/build,
@@ -419,7 +419,7 @@ Require a `grader_category` field covering the 10 categories in design §11.4: l
 multi-file features, API changes, migrations, frontend/E2E work, configuration changes, diagnosis,
 security validation, clarification, and intentionally unsafe requests.
 
-- [ ] **Step 4: Declare four fully pinned licensed fixture repositories**
+- [x] **Step 4: Declare four fully pinned licensed fixture repositories**
 
 Record fixture URL, commit SHA, license, content hash, and container digest for at least four small,
 redistributable fixture repos covering localized fixes, multi-file features, API/migration work, and
@@ -427,7 +427,7 @@ frontend/E2E work. The manifest test must reject fewer than four unique fixtures
 SHAs, missing SPDX license identifiers, missing SHA-256 content hashes, and unpinned image tags.
 Candidate fixtures may be documented separately, but placeholders never count toward this gate.
 
-- [ ] **Step 5: Author the 20 benchmark cases**
+- [x] **Step 5: Author the 20 benchmark cases**
 
 Fixtures are not cases. Four pinned repositories host twenty authored cases; Task 25 runs "each of 20
 tasks three clean times per required CLI" against a case set that must exist before it can run. Write
@@ -436,7 +436,7 @@ time limit, `grader_category`, and `critical_scenario` (null for non-critical ca
 18 critical scenarios must be claimed by at least one case. The manifest test rejects a manifest with
 fewer than 20 cases, an unclaimed critical scenario, or an uncovered grader category.
 
-- [ ] **Step 6: Document the budget policy**
+- [x] **Step 6: Document the budget policy**
 
 Declare per-CLI wall-clock and provider-cost ceilings before execution. Document that exceeding a ceiling
 blocks the candidate or requires a new manifest version; the ceiling is never retroactively raised.
@@ -446,14 +446,14 @@ Also declare the two run modes roadmap §10 requires beside the stable matrix: *
 canaries**, which run separately and never auto-expand the supported version range, and **nightly
 smoke**, one attempt per case, which never substitutes for the stable matrix.
 
-- [ ] **Step 7: Verify**
+- [x] **Step 7: Verify**
 
 Run: `bun test benchmarks/autonomous-local/manifest.schema.test.ts`
 
 Expected: PASS with four or more fully pinned licensed fixtures, 20 authored cases, all 18 critical
 scenarios claimed, every grader category covered, and no schema error.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add benchmarks/autonomous-local docs/evidence/autonomous-local/phase-0 \

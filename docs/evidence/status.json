@@ -1,7 +1,7 @@
 {
 	"schemaVersion": 1,
-	"generatedAt": "2026-07-27T13:59:13.000Z",
-	"gitSha": "ac9459b00c55393ed646ed016c1a8c85373904a7",
+	"generatedAt": "2026-07-27T14:07:00.000Z",
+	"gitSha": "2cb9654068573a9cadb6d9a757fea2c8f65839d0",
 	"packages": [
 		{
 			"name": "@termbridge/claude-code-plugin",
@@ -63,8 +63,8 @@
 			"name": "test",
 			"command": "bun test",
 			"exitCode": 0,
-			"passed": 789,
-			"files": 52
+			"passed": 801,
+			"files": 53
 		}
 	]
 }
