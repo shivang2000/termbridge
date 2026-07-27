@@ -1,0 +1,35 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://termbridge.dev/schemas/gate-evidence.schema.json",
+	"title": "Autonomous Local phase gate evidence",
+	"description": "Machine-checkable record embedded as a fenced json block in each docs/evidence/autonomous-local/<phase>/gate.md. Validated by scripts/gate-check.ts (validateGateEvidence mirrors this schema; keep them in sync).",
+	"type": "object",
+	"additionalProperties": false,
+	"required": ["schemaVersion", "phase", "recordedAt", "gitSha", "criteria"],
+	"properties": {
+		"schemaVersion": { "const": 1 },
+		"phase": { "enum": ["0", "1", "2", "3", "4a", "4b", "4c", "release"] },
+		"recordedAt": { "type": "string", "format": "date-time" },
+		"gitSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+		"reviewerSignOff": {
+			"type": ["string", "null"],
+			"description": "Required non-empty for phase 1 before live provider work begins."
+		},
+		"criteria": {
+			"type": "array",
+			"minItems": 1,
+			"items": {
+				"type": "object",
+				"additionalProperties": false,
+				"required": ["name", "command", "exitCode"],
+				"properties": {
+					"name": { "type": "string", "minLength": 1 },
+					"command": { "type": "string", "minLength": 1 },
+					"exitCode": { "type": "integer" },
+					"evidencePath": { "type": "string" },
+					"notes": { "type": "string" }
+				}
+			}
+		}
+	}
+}

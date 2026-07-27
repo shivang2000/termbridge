@@ -1,7 +1,12 @@
 # termbridge — Roadmap
 
-> Source of truth for **where the project is and where it's going**. Companion to
-> [PLAN.md](PLAN.md) (the detailed *implementation* plan) and
+> **HISTORICAL (V1, superseded 2026-07-25).** The canonical roadmap is
+> [ROADMAP-V2.md](ROADMAP-V2.md); this file is kept as the V1 record. Anything here that
+> conflicts with ROADMAP-V2 (scope, milestones, test counts) is stale — generated,
+> current status lives in [evidence/status.md](evidence/status.md).
+>
+> Former source of truth for **where the project is and where it's going**. Companion to
+> [PLAN.md](PLAN.md) (the detailed *implementation* plan, also historical) and
 > [DECISIONS.md](DECISIONS.md) (the locked architecture decisions D1–D8).
 >
 > Status legend: ✅ shipped · 🟡 designed/deferred · 🔲 not started · 🔁 ongoing

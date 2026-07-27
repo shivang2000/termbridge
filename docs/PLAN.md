@@ -1,7 +1,12 @@
 # termbridge — Detailed Implementation Plan
 
-Status: **planning**. This document is the source of truth for what we are building and in what order.
-Companion docs: [ARCHITECTURE.md](ARCHITECTURE.md), [RESEARCH.md](RESEARCH.md), [DECISIONS.md](DECISIONS.md).
+> **HISTORICAL (V1, superseded 2026-07-25).** The canonical implementation plan is
+> [superpowers/plans/2026-07-25-autonomous-local.md](superpowers/plans/2026-07-25-autonomous-local.md);
+> this file is kept as the V1 record.
+
+Status: **planning** (V1 record). This document was the source of truth for what we were building and in
+what order. Companion docs: [ARCHITECTURE.md](ARCHITECTURE.md), [RESEARCH.md](RESEARCH.md),
+[DECISIONS.md](DECISIONS.md).
 
 ---
 

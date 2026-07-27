@@ -1,0 +1,70 @@
+{
+	"schemaVersion": 1,
+	"generatedAt": "2026-07-27T12:59:10.000Z",
+	"gitSha": "ee26d3aa60c2bf9e5d04ac85adfc965822f1da44",
+	"packages": [
+		{
+			"name": "@termbridge/claude-code-plugin",
+			"version": "1.0.7",
+			"classification": "private"
+		},
+		{
+			"name": "@termbridge/core",
+			"version": "1.0.7",
+			"classification": "published"
+		},
+		{
+			"name": "@termbridge/mcp-server",
+			"version": "1.0.7",
+			"classification": "published"
+		},
+		{
+			"name": "@termbridge/orchestrator",
+			"version": "1.0.7",
+			"classification": "published"
+		},
+		{
+			"name": "@termbridge/sandbox-cloudflare",
+			"version": "0.1.0",
+			"classification": "experimental"
+		},
+		{
+			"name": "@termbridge/sandbox-daytona",
+			"version": "0.1.0",
+			"classification": "experimental"
+		},
+		{
+			"name": "@termbridge/sandbox-e2b",
+			"version": "1.0.10",
+			"classification": "published"
+		},
+		{
+			"name": "@termbridge/server",
+			"version": "1.0.7",
+			"classification": "published"
+		}
+	],
+	"checks": [
+		{
+			"name": "lint",
+			"command": "bun run lint",
+			"exitCode": 0,
+			"passed": null,
+			"files": null
+		},
+		{
+			"name": "typecheck",
+			"command": "bun run typecheck",
+			"exitCode": 0,
+			"passed": null,
+			"files": null
+		},
+		{
+			"name": "test",
+			"command": "bun test",
+			"exitCode": 0,
+			"passed": 789,
+			"files": 52
+		}
+	]
+}

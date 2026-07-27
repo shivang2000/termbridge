@@ -13,6 +13,8 @@
 		"typecheck": "turbo typecheck",
 		"dev": "turbo dev",
 		"check": "biome check --write .",
+		"status:generate": "bun scripts/project-status.ts",
+		"status:check": "bun scripts/project-status.ts --check",
 		"smoke:concurrency": "bun scripts/smoke-concurrency.ts"
 	},
 	"devDependencies": {

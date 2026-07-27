@@ -171,18 +171,18 @@ Expected: one commit containing only the eight authority documents.
   Constraint 14 requires phase evidence but nothing verified it; this is that check. Build it in Phase 0
   so every later gate has a runnable form from the start.
 
-- [ ] **Step 1: Write the failing manifest tests**
+- [x] **Step 1: Write the failing manifest tests**
 
 Test a fixture workspace containing two package manifests and recorded test/lint results. Assert sorted
 package versions, repository SHA, command metadata, package/repository test counts, and stable Markdown.
 
-- [ ] **Step 2: Run the focused test**
+- [x] **Step 2: Run the focused test**
 
 Run: `bun test scripts/project-status.test.ts`
 
 Expected: FAIL because `collectProjectStatus` does not exist.
 
-- [ ] **Step 3: Implement deterministic collection and rendering**
+- [x] **Step 3: Implement deterministic collection and rendering**
 
 Use typed records:
 
@@ -204,18 +204,18 @@ export interface ProjectStatus {
 
 Make `--check` regenerate in memory and compare exact tracked content without rewriting.
 
-- [ ] **Step 4: Wire CI and correct stale authority claims**
+- [x] **Step 4: Wire CI and correct stale authority claims**
 
 Add `status:generate` and `status:check` scripts. Replace hand-maintained test/version tables with links
 or generated blocks. Mark `docs/ROADMAP.md` and `docs/PLAN.md` historical.
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 Run: `bun test scripts/project-status.test.ts && bun run status:generate && bun run status:check`
 
 Expected: PASS and no generated drift.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add scripts/project-status.ts scripts/project-status.test.ts package.json \

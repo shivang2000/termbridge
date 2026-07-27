@@ -17,6 +17,9 @@ jobs:
       - run: bun install --frozen-lockfile
       # Unit suite is fully mocked (no tmux/docker/network) — safe in CI.
       # Real-tmux/Docker/claude smokes in scripts/ stay manual/operator-run.
+      # status:check fails when tracked generated status drifts from the repo's
+      # real versions/test counts (docs/evidence/status.{json,md}).
+      - run: bun run status:check
       - run: bun run typecheck
       - run: bun run lint
       - run: bun run test

@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+Autonomous Local Phase 0 (Task 0–1): generated repository truth + executable phase gates.
+
+- **`scripts/project-status.ts` + `bun run status:generate` / `status:check`**: package versions,
+  classifications, and lint/typecheck/test counts are generated into
+  [`docs/evidence/status.{json,md}`](docs/evidence/status.md) and drift-checked in CI — replaces the
+  hand-maintained "~900 tests / v1.0.4" claims that had drifted from reality.
+- **`scripts/gate-check.ts`**: `bun scripts/gate-check.ts --phase <0|1|2|3|4a|4b|4c|release>` makes
+  every phase gate in the Autonomous Local plan executable — plan-checkbox scan, gate-evidence
+  validation (`docs/evidence/autonomous-local/gate-evidence.schema.json`), and the commands each
+  gate names. Gates fail closed with named reasons.
+- `docs/ROADMAP.md` and `docs/PLAN.md` are marked historical (superseded by `docs/ROADMAP-V2.md`
+  and the Autonomous Local plan).
+
 Live Daytona smoke + multi-provider smoke runner + Cloudflare Containers control Worker.
 
 - **`createDaytonaClientFromEnv()`** (`@daytona/sdk`) + `scripts/smoke-sandbox-daytona.ts`

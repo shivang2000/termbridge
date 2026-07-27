@@ -120,14 +120,16 @@ All of these pilot `claude` on your **subscription** (not metered API), one shar
 | `packages/orchestrator` | Reusable iterate-until-done **engineering loop** (`runEngineerLoop`) over the tool surface — agent-agnostic, consumer-side (D8: not in core) |
 | `packages/claude-code-plugin` | Turnkey Claude Code plugin that registers the termbridge MCP server |
 
-## Status — v1.0.4
+## Status — v1.0.7
 
 **M1–M7 complete; stable.** An agent piloted a real logged-in `claude` TUI through the tool
 surface to edit a bound git repo while a human watched live — subscription auth, no API key. Proven
 end-to-end through a third-party runtime (Hermes): single drive, a real repo edit, a parallel fleet each
 piloting its own `claude`, the concurrency cap, and the **autonomous engineering loop** (claude fixed a
-failing test, host-verified). ~900 unit tests; real tmux / Docker / MCP / web (Playwright) / auth /
-concurrency / engineer-loop / docker-only-guard / Hermes smokes all green; CI gates typecheck+lint+test.
+failing test, host-verified). Unit-test counts, package versions, and check exit codes are **generated,
+not hand-maintained** — see [docs/evidence/status.md](docs/evidence/status.md) (`bun run status:check`
+gates drift in CI). Real tmux / Docker / MCP / web (Playwright) / auth /
+concurrency / engineer-loop / docker-only-guard / Hermes smokes all green; CI gates status+typecheck+lint+test.
 Published image: `shivang2000/termbridge:1.0.1` (+ `:latest`). See [CHANGELOG](CHANGELOG.md).
 
 Optional: a live cloud sandbox smoke (`scripts/smoke-sandbox-e2b.ts`) — the `@termbridge/sandbox-e2b`
@@ -157,7 +159,7 @@ The unified server now also speaks the **MCP streamable-HTTP transport** at `POS
 git clone https://github.com/shivang2000/termbridge.git
 cd termbridge
 bun install
-bun run test       # ~900 unit tests (all mocked — spawns no tmux/docker)
+bun run test       # unit tests, all mocked — spawns no tmux/docker (counts: docs/evidence/status.md)
 bun run typecheck  # tsc --noEmit across packages
 bun run lint       # biome
 ```
