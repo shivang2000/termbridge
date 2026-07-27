@@ -338,14 +338,14 @@ documentation-only and has no code dependencies, so it runs in parallel with the
 
 - Produces: an accepted threat model covering the seven surfaces roadmap §11 names.
 
-- [ ] **Step 1: Enumerate assets, actors, and trust boundaries**
+- [x] **Step 1: Enumerate assets, actors, and trust boundaries**
 
 Assets: subscription credentials, tracker and GitHub App credentials, repository contents, task
 evidence, and the operator's host. Actors: the operator, the driven CLI, the tracker, the forge, and
 any untrusted issue author. Boundaries: loopback HTTP, the MCP stdio channel, the sandbox, the worktree,
 and the browser session.
 
-- [ ] **Step 2: Analyze each of the seven required surfaces**
+- [x] **Step 2: Analyze each of the seven required surfaces**
 
 One section each, with `## ` headings so the Phase 0 gate can check them: Local daemon, CLI adapter,
 sandbox, Git, forge, browser, and supply chain. For each, record the threats, the existing mitigation,
@@ -353,12 +353,12 @@ the residual risk, and the test or gate that holds the mitigation honest. Treat 
 repository files as untrusted input throughout — prompt injection reaching a privileged operation is
 the highest-severity path in this product.
 
-- [ ] **Step 3: Record accepted risks and their review triggers**
+- [x] **Step 3: Record accepted risks and their review triggers**
 
 Anything not mitigated gets an owner, a reason, and a next review date, matching the defer policy in
 roadmap §15.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 Run: `rg -n '^## (Local daemon|CLI adapter|Sandbox|Git|Forge|Browser|Supply chain)$' docs/security/threat-model.md`
 
