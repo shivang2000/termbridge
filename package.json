@@ -20,7 +20,7 @@
 		"@daytona/sdk": "^0.195.0",
 		"@modelcontextprotocol/sdk": "^1.29.0",
 		"@types/bun": "^1.1.0",
-		"@types/node": "^22.0.0",
+		"@types/node": "^26.1.1",
 		"e2b": "^2.32.0",
 		"turbo": "^2.5.0",
 		"typescript": "^5.7.0"
